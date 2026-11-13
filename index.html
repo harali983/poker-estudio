@@ -57,10 +57,15 @@
 
     <!-- El menú va abajo, al alcance del pulgar. Son enlaces: cambian el #… de la dirección -->
     <nav class="menu" aria-label="Menú principal">
+      <!-- Solo se ve si hay una partida en curso (pantalla-inicio.js) -->
+      <a href="#jugar" id="continuar-partida" class="opcion-menu opcion-continuar" hidden>
+        <strong>▶ Continuar partida</strong>
+        <small id="continuar-detalle"></small>
+      </a>
       <a href="#jugar" class="opcion-menu opcion-principal">
         <span class="opcion-icono" aria-hidden="true">🃏</span>
         <strong>Jugar</strong>
-        <small>Registrar una partida real</small>
+        <small id="jugar-subtitulo">Registrar una partida real</small>
       </a>
       <a href="#manos" class="opcion-menu">
         <span class="opcion-icono" aria-hidden="true">📒</span>
@@ -78,19 +83,84 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.2</p>
+    <p class="version">Versión 0.2.3</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
   <section id="pantalla-jugar" class="pantalla" hidden>
     <header class="barra-pantalla">
       <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
-      <h1>Jugar</h1>
+      <h1 id="mesa-titulo">Preparar la mesa</h1>
     </header>
-    <div class="tarjeta proximamente">
-      <p><strong>Próximamente.</strong> Aquí prepararás la mesa (jugadores, asientos, botón y ciegas) y registrarás la partida mano a mano.</p>
-      <p class="texto-suave texto-pequeno">Fase 2, paso 3.</p>
+
+    <!-- Mesa ovalada: los asientos y la ficha del botón los dibuja pantalla-mesa.js.
+         Tu asiento siempre queda abajo; los siguientes, hacia tu izquierda. -->
+    <div id="mesa-ovalada" class="mesa-ovalada">
+      <div class="tapete" aria-hidden="true"></div>
     </div>
+    <p id="mesa-pista" class="texto-suave texto-pequeno centrado">Toca un asiento para ponerle nombre, sentarte en él o darle el botón.</p>
+
+    <!-- Editor del asiento tocado -->
+    <section id="editor-asiento" class="tarjeta" hidden>
+      <div class="fila">
+        <h2 id="editor-titulo">Asiento</h2>
+        <button id="btn-editor-cerrar" type="button" class="boton boton-pequeno boton-acento">Listo</button>
+      </div>
+      <div id="editor-nombre-bloque">
+        <label class="campo">Nombre
+          <input id="editor-nombre" type="text" autocomplete="off" autocapitalize="words" enterkeyhint="done" maxlength="30" placeholder="Nombre del rival">
+        </label>
+        <p id="editor-conocidos-titulo" class="texto-suave texto-pequeno">Rivales conocidos:</p>
+        <div id="editor-conocidos" class="chips"></div>
+      </div>
+      <label id="editor-fichas-bloque" class="campo">Fichas
+        <input id="editor-fichas" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+      </label>
+      <div class="fila-botones">
+        <button id="btn-sentarme" type="button" class="boton">Sentarme aquí</button>
+        <button id="btn-boton-aqui" type="button" class="boton">Dar el botón</button>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <div class="fila">
+        <span>Jugadores</span>
+        <div class="contador">
+          <button id="mesa-menos" type="button" class="boton boton-redondo" aria-label="Menos jugadores">−</button>
+          <strong id="mesa-num">6</strong>
+          <button id="mesa-mas" type="button" class="boton boton-redondo" aria-label="Más jugadores">+</button>
+        </div>
+      </div>
+
+      <h2>Ciegas</h2>
+      <div class="fila campos">
+        <label>Pequeña
+          <input id="mesa-sb" type="text" inputmode="decimal" autocomplete="off">
+        </label>
+        <label>Grande
+          <input id="mesa-bb" type="text" inputmode="decimal" autocomplete="off">
+        </label>
+        <label>Ante
+          <input id="mesa-ante" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        </label>
+      </div>
+
+      <label class="interruptor">
+        <input id="mesa-con-fichas" type="checkbox">
+        <span>Llevar la cuenta de las fichas</span>
+      </label>
+      <div id="bloque-fichas-todos" class="fila campos" hidden>
+        <label>Fichas para todos
+          <input id="mesa-fichas-todos" type="text" inputmode="decimal" autocomplete="off" placeholder="p. ej. 200">
+        </label>
+        <button id="btn-fichas-todos" type="button" class="boton boton-alineado">Aplicar</button>
+      </div>
+    </section>
+
+    <ul id="mesa-mensajes" class="mensajes" aria-live="polite"></ul>
+    <p id="mesa-guardado" class="guardado" aria-live="polite"></p>
+    <button id="btn-empezar" type="button" class="boton boton-ancho boton-acento">Empezar partida</button>
+    <button id="btn-terminar" type="button" class="boton boton-ancho boton-peligro" hidden>Terminar partida</button>
   </section>
 
   <!-- ==================== PANTALLA: MIS MANOS ==================== -->

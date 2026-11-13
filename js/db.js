@@ -179,6 +179,20 @@ export function crearBD(nombre = NOMBRE) {
       });
     },
 
+    /**
+     * Guarda en varios almacenes a la vez, todo o nada.
+     * Ejemplo: guardarJuntos({ jugadores: [ana, bea], partidas: [partida] })
+     */
+    guardarJuntos(cambios) {
+      const almacenes = Object.keys(cambios);
+      return transaccion(almacenes, 'readwrite', (tx) => {
+        for (const almacen of almacenes) {
+          const a = tx.objectStore(almacen);
+          for (const objeto of cambios[almacen]) a.put(objeto);
+        }
+      });
+    },
+
     /** Lee un objeto por su clave. Devuelve undefined si no existe. */
     leer(almacen, clave) {
       return transaccion(almacen, 'readonly', (tx) => tx.objectStore(almacen).get(clave));

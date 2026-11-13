@@ -26,6 +26,8 @@
   <ul id="lista-numeros"></ul>
   <h2>Ajustes</h2>
   <ul id="lista-ajustes"></ul>
+  <h2>Mesa</h2>
+  <ul id="lista-mesa"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
   <h2>Base de datos (IndexedDB, en una base de datos de prueba aparte)</h2>
@@ -38,6 +40,10 @@
     import { interpretarNumero } from '../js/numeros.js';
     import { validarCiegas } from '../js/ajustes.js';
     import { crearBD, borrarBaseDeDatos, ErrorBD, mensajeParaUsuario } from '../js/db.js';
+    import {
+      crearBorrador, cambiarNumJugadores, sentarme, cambiarAsiento, fichasParaTodos, posicionEnMesa,
+      validarMesa, resolverJugadores, crearPartida, borradorDePartida,
+    } from '../js/mesa.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -142,6 +148,85 @@
     ciegas('1', '', '', 'error', 'Ciega grande vacía: error');
     ciegas('abc', '2', '', 'error', 'Ciega pequeña no numérica: error');
     ciegas('1', '2', 'x', 'error', 'Ante no numérico: error');
+
+    // ---- Mesa (mesa.js) ----
+    {
+      const L = 'lista-mesa';
+      const ok = (bien, texto, detalle = '') => anotar(L, bien, texto, detalle);
+      const nombres = (b) => b.asientos.map((a) => a.nombre || '·').join(' ');
+      const indices = (b) => b.asientos.map((a) => a.asiento).join(',');
+      const conNombres = (b, lista) => lista.reduce((acc, [i, n]) => cambiarAsiento(acc, i, { nombre: n }), b);
+
+      const b6 = crearBorrador(6, { sb: 1, bb: 2, ante: 0 });
+      ok(b6.asientos.length === 6 && b6.ciegasTexto.sb === '1' && b6.ciegasTexto.ante === '',
+        'Mesa nueva de 6, con las ciegas por defecto', JSON.stringify(b6.ciegasTexto));
+      ok(crearBorrador(12, { sb: 1, bb: 2 }).asientos.length === 9 && crearBorrador(1, { sb: 1, bb: 2 }).asientos.length === 2,
+        'El número de jugadores se limita a 2–9');
+
+      const b9 = cambiarNumJugadores(b6, 9);
+      ok(b9.asientos.length === 9 && indices(b9) === '0,1,2,3,4,5,6,7,8', 'Subir a 9: asientos 0–8', indices(b9));
+
+      // Al quitar asientos se quitan primero los vacíos, y se conservan los nombres
+      const conAnaBea = conNombres(b6, [[1, 'Ana'], [5, 'Bea']]);
+      const b3 = cambiarNumJugadores(conAnaBea, 3);
+      ok(nombres(b3) === '· Ana Bea' && indices(b3) === '0,1,2', 'Bajar a 3 quita los asientos vacíos y conserva Ana y Bea', nombres(b3));
+
+      const llenos = conNombres(crearBorrador(4, { sb: 1, bb: 2 }), [[1, 'A'], [2, 'B'], [3, 'C']]);
+      ok(nombres(cambiarNumJugadores(llenos, 3)) === '· A B', 'Si todos tienen nombre, se quita el último');
+
+      const yoAl5 = { ...crearBorrador(6, { sb: 1, bb: 2 }), miAsiento: 5 };
+      const yoReducido = cambiarNumJugadores(yoAl5, 2);
+      ok(yoReducido.asientos.length === 2 && yoReducido.miAsiento === 1, 'Tu asiento nunca se quita (y su número se ajusta)',
+        'miAsiento = ' + yoReducido.miAsiento);
+
+      const botonAl4 = { ...crearBorrador(6, { sb: 1, bb: 2 }), boton: 4 };
+      const botonMovido = cambiarNumJugadores(conNombres(botonAl4, [[5, 'Z']]), 5);
+      ok(botonMovido.boton === 4 && nombres(botonMovido) === '· · · · Z',
+        'Si se quita el asiento del botón, el botón pasa al siguiente', 'botón = ' + botonMovido.boton);
+
+      const sentado = sentarme(conNombres(crearBorrador(4, { sb: 1, bb: 2 }), [[2, 'Ana']]), 2);
+      ok(sentado.miAsiento === 2 && sentado.asientos[0].nombre === 'Ana' && sentado.asientos[2].nombre === '',
+        'Sentarme en el asiento de Ana: nos intercambiamos', nombres(sentado));
+
+      const p = (i, n, mi) => JSON.stringify(posicionEnMesa(i, n, mi));
+      ok(p(0, 4, 0) === '{"x":50,"y":91}', 'Mi asiento queda abajo en el centro', p(0, 4, 0));
+      ok(p(1, 4, 0) === '{"x":10,"y":50}' && p(2, 4, 0) === '{"x":50,"y":9}' && p(3, 4, 0) === '{"x":90,"y":50}',
+        'Con 4: el siguiente a mi izquierda, luego enfrente, luego a mi derecha', `${p(1, 4, 0)} ${p(2, 4, 0)} ${p(3, 4, 0)}`);
+      ok(p(3, 6, 3) === '{"x":50,"y":91}', 'Si me siento en otro asiento, la mesa gira y sigo abajo');
+
+      // Validación
+      const errores = (b) => validarMesa(b).errores;
+      const avisos = (b) => validarMesa(b).avisos;
+      const valida = conNombres(crearBorrador(3, { sb: 1, bb: 2 }), [[1, 'Ana'], [2, 'Bea']]);
+      ok(errores(valida).length === 0 && avisos(valida).length === 0, 'Mesa completa: sin errores ni avisos');
+      ok(errores(conNombres(valida, [[2, '  ana ']])).some((e) => e.includes('dos asientos')),
+        'El mismo nombre en dos asientos (mayúsculas y espacios aparte) es un error', errores(conNombres(valida, [[2, '  ana ']]))[0]);
+      ok(avisos(cambiarAsiento(valida, 2, { nombre: '' }))[0]?.includes('1 asiento sin nombre'),
+        'Asiento sin nombre: aviso (se puede empezar igualmente)', avisos(cambiarAsiento(valida, 2, { nombre: '' }))[0]);
+      const conFichas = { ...valida, conFichas: true };
+      ok(errores(conFichas)[0] === 'Faltan las fichas de: Tú, Ana, Bea.', 'Con fichas: falta poner las de cada uno', errores(conFichas)[0]);
+      ok(errores(fichasParaTodos(conFichas, 200)).length === 0, '"Fichas para todos" lo resuelve');
+      ok(errores({ ...valida, ciegasTexto: { sb: '1', bb: '', ante: '' } }).length === 1, 'Ciegas no válidas: error');
+
+      // Jugadores guardados
+      let contador = 0;
+      const nuevoId = () => 'nuevo' + (++contador);
+      const conocidos = [{ id: 'j-ana', nombre: 'Ana' }];
+      const mesaR = conNombres(crearBorrador(4, { sb: 1, bb: 2 }), [[1, ' ANA '], [2, 'Carlos  Pérez']]);
+      const r = resolverJugadores(mesaR, conocidos, nuevoId, '2026-11-13');
+      ok(r.asientos.map((a) => a.jugadorId).join(',') === 'yo,j-ana,nuevo1,',
+        'Tú = "yo"; un nombre conocido reutiliza su jugador; uno nuevo se crea; vacío = sin jugador',
+        r.asientos.map((a) => a.jugadorId).join(','));
+      ok(r.nuevos.length === 1 && r.nuevos[0].nombre === 'Carlos Pérez', 'El jugador nuevo se guarda con el nombre limpio', r.nuevos[0]?.nombre);
+      ok(r.asientos.every((a) => a.fichas === null), 'Sin "llevar fichas", no se guardan fichas');
+
+      const partida = crearPartida({ ...mesaR, ciegasTexto: { sb: '500', bb: '1.000', ante: '' }, boton: 2 }, r.asientos, 'p1', '2026-11-13');
+      ok(partida.estado === 'en-curso' && partida.ciegas.bb === 1000 && partida.boton === 2 && partida.formato === 1,
+        'La partida se crea en curso, con las ciegas como números', JSON.stringify(partida.ciegas));
+      const vuelta = borradorDePartida(partida, new Map([['j-ana', 'Ana'], ['nuevo1', 'Carlos Pérez']]));
+      ok(nombres(vuelta) === '· Ana Carlos Pérez ·' && vuelta.ciegasTexto.bb === '1000' && vuelta.boton === 2,
+        'Editar una partida guardada recupera nombres, ciegas y botón', nombres(vuelta));
+    }
 
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----
     const pruebaWorker = new Promise((terminar) => {

@@ -6,6 +6,8 @@
 
 import { iniciarCalculadora } from './pantalla-calculadora.js';
 import { iniciarAjustes } from './pantalla-ajustes.js';
+import { iniciarInicio } from './pantalla-inicio.js';
+import { iniciarMesa } from './pantalla-mesa.js';
 import { bd, pedirPersistencia } from './db.js';
 import { mostrarError } from './avisos.js';
 
@@ -58,6 +60,8 @@ const PANTALLAS = ['inicio', 'jugar', 'manos', 'calculadora', 'ajustes'];
 // Lo que devuelve ({ alEntrar, alSalir }, ambos opcionales) se guarda aquí.
 const preparadas = {};
 const INICIAR = {
+  inicio: iniciarInicio,
+  jugar: iniciarMesa,
   calculadora: iniciarCalculadora,
   ajustes: iniciarAjustes,
 };
