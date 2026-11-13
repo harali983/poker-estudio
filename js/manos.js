@@ -1,11 +1,16 @@
 // manos.js: guardar y leer las manos en la base de datos (almacén "manos").
-// La lógica de la mano está en motor.js; aquí solo se lee y se escribe.
+// La lógica de la mano está en motor.js (acciones), final.js (reparto y fichas) y
+// estadisticas.js (participaciones); aquí se juntan y se guardan.
 //
 // Una mano en curso es la que tiene final === null. Cada acción se guarda al momento
 // (la mano entera, con su lista de eventos), sin esperas: ver la regla de guardado del plan.
+// Lo que se elige en el showdown (ganadores y cartas mostradas) también se guarda al momento,
+// en mano.cierre, hasta que "Siguiente mano" cierra la mano.
 
 import { bd } from './db.js';
 import { crearMano } from './motor.js';
+import { calcularFinal, fichasDespues } from './final.js';
+import { calcularParticipaciones } from './estadisticas.js';
 import { siguienteBoton } from './posiciones.js';
 
 /** La mano en curso de la partida (o null si está entre manos). */
@@ -31,30 +36,41 @@ export function guardarMano(mano) {
 }
 
 /**
- * Cierra la mano terminada (lógica pura, con tests): apunta el final y prepara la partida
- * para la siguiente mano (el botón avanza y se cuenta la mano).
- * Si todos se retiraron, el que queda se lleva el bote. En el showdown, los ganadores y el
- * reparto los elegirás en el paso 9; de momento quedan sin anotar.
+ * Cierra la mano terminada (lógica pura, con tests):
+ *  - apunta el final (ganadores, lo que se devuelve y las cartas mostradas),
+ *  - actualiza las fichas de la partida (si se llevan), el botón avanza y se cuenta la mano,
+ *  - calcula las participaciones de cada jugador.
+ * cierre: lo elegido en el showdown { ganadores: [asientos], mostradas: [{ asiento, cartas }] }.
  */
-export function cerrarMano(mano, partida, estado) {
-  const final = {
-    motivo: estado.motivoFin,
-    ganadores: estado.motivoFin === 'retirada' ? [{ asiento: estado.ganador, cantidad: estado.bote }] : [],
-    mostradas: [],
-  };
+export function cerrarMano(mano, partida, estado, cierre = mano.cierre || {}) {
+  const final = calcularFinal(mano, estado, cierre);
+  const { cierre: _borrador, ...sinBorrador } = mano;
+  const cerrada = { ...sinBorrador, final };
+  const asientos = fichasDespues(partida, mano, estado, final);
   return {
-    mano: { ...mano, final },
+    mano: cerrada,
     partida: {
       ...partida,
+      asientos,
+      // El botón pasa al siguiente que jugaba esta mano. Si ese se ha quedado sin fichas,
+      // calcularPosiciones lo salta en la mano siguiente (botonEfectivo).
       boton: siguienteBoton(partida.asientos, mano.boton),
       manosJugadas: (partida.manosJugadas || 0) + 1,
     },
+    participaciones: calcularParticipaciones(cerrada),
   };
 }
 
-/** Guarda la mano cerrada y la partida actualizada a la vez (todo o nada). Devuelve la partida. */
-export async function terminarMano(mano, partida, estado) {
-  const cerrada = cerrarMano(mano, partida, estado);
-  await bd.guardarJuntos({ manos: [cerrada.mano], partidas: [cerrada.partida] });
-  return cerrada.partida;
+/**
+ * Guarda la mano cerrada, sus participaciones y la partida actualizada a la vez (todo o nada).
+ * Devuelve lo cerrado ({ mano, partida, participaciones }).
+ */
+export async function terminarMano(mano, partida, estado, cierre) {
+  const cerrada = cerrarMano(mano, partida, estado, cierre);
+  await bd.guardarJuntos({
+    manos: [cerrada.mano],
+    partidas: [cerrada.partida],
+    participaciones: cerrada.participaciones,
+  });
+  return cerrada;
 }

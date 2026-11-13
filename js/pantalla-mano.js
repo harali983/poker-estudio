@@ -6,7 +6,10 @@
 //  - Mano en curso: a quién le toca, el bote, las acciones (Fold, Check, Call, Apostar, Subir),
 //    Deshacer y la fila de cartas (la mesa y las tuyas). Al cerrarse una calle,
 //    "Poner el flop/turn/river" abre la hoja de cartas.
-//  - Mano terminada: el resultado y "Siguiente mano" (el botón avanza).
+//  - Mano terminada: el resultado (quién gana cuánto) y "Siguiente mano", que la cierra:
+//    guarda el final, las fichas, las participaciones y la partida a la vez, y el botón avanza.
+//    En el showdown se elige antes quién gana (uno o varios) y, si se quiere, las cartas que
+//    se mostraron. Lo elegido se guarda al momento en mano.cierre.
 //
 // Regla de guardado: cada toque → se guarda la mano en la base de datos → se pinta.
 // Sin temporizadores: si iOS cierra la app, lo que se ve en pantalla ya está guardado.
@@ -21,6 +24,7 @@ import { calcularPosiciones } from './posiciones.js';
 import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
 import { manoEnCurso, empezarMano, guardarMano, terminarMano } from './manos.js';
+import { calcularFinal, avisoBotes } from './final.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad } from './teclado.js';
 import { ErrorBD } from './db.js';
 import { mostrarError } from './avisos.js';
@@ -37,10 +41,12 @@ export function iniciarMano() {
   let mano = null;          // mano en curso (null = entre manos)
   let nombres = new Map();  // jugadorId → nombre
   let ocupado = false;      // guardando: se ignoran más toques hasta terminar
+  let ultimoResultado = null; // { partidaId, texto }: resultado de la mano anterior (se ve entre manos)
 
   async function cargar() {
     try {
       partida = await partidaEnCurso();
+      if (!partida || !ultimoResultado || ultimoResultado.partidaId !== partida.id) ultimoResultado = null;
       mano = partida ? await manoEnCurso(partida.id) : null;
       nombres = await nombresDeJugadores();
     } catch (error) {
@@ -119,7 +125,7 @@ export function iniciarMano() {
   // Al cerrarse una calle, "Poner el flop/turn/river" abre la hoja. Las cartas ya puestas se
   // tocan para cambiarlas. Tus cartas se pueden poner o cambiar en cualquier momento.
   const hojaCartas = crearHojaCartas($('hoja-cartas-mano'), { noCerrarEn: '.carta-mini' });
-  let eligiendo = null; // { tipo: 'mias' | 'mesa', calle, nueva, cartas: [...], indice, soloUna }
+  let eligiendo = null; // { tipo: 'mias' | 'mesa' | 'mostradas', calle, asiento, nueva, cartas: [...], indice, soloUna }
 
   $('btn-cartas').addEventListener('click', () => {
     if (!mano) return;
@@ -133,6 +139,30 @@ export function iniciarMano() {
     const soloUna = i < actuales.length && actuales.length === 2;
     eligiendo = { tipo: 'mias', cartas: actuales, indice: soloUna ? i : actuales.length, soloUna };
     abrirHoja();
+  }
+
+  // Cartas que mostró un rival en el showdown (opcionales)
+  function abrirMostradas(asiento, i) {
+    const actuales = [...mostradasDe(asiento)];
+    const soloUna = i < actuales.length && actuales.length === 2;
+    eligiendo = { tipo: 'mostradas', asiento, cartas: actuales, indice: soloUna ? i : actuales.length, soloUna };
+    abrirHoja();
+  }
+
+  // Lo elegido en el showdown (ganadores y cartas mostradas), guardado en la mano hasta cerrarla
+  function cierreActual() {
+    return { ganadores: [], mostradas: [], ...(mano.cierre || {}) };
+  }
+  function mostradasDe(asiento) {
+    const m = cierreActual().mostradas.find((x) => x.asiento === asiento);
+    return m ? m.cartas : [];
+  }
+  function guardarCierre(cambios) {
+    guardarCartas({ ...mano, cierre: { ...cierreActual(), ...cambios } });
+  }
+  function ponerMostradas(asiento, cartas) {
+    const otras = cierreActual().mostradas.filter((x) => x.asiento !== asiento);
+    guardarCierre({ mostradas: cartas.length ? [...otras, { asiento, cartas }] : otras });
   }
 
   function abrirCalle(calle, i) {
@@ -156,6 +186,7 @@ export function iniciarMano() {
     const antes = e.soloUna ? [] : e.cartas.slice(0, e.indice);
     const elegidas = antes.length ? ': ' + antes.map(textoCarta).join(' ') : '';
     if (e.tipo === 'mias') return `Tus cartas${elegidas} · ${e.indice + 1}ª`;
+    if (e.tipo === 'mostradas') return `${nombreEnMano(e.asiento)} mostró${elegidas} · ${e.indice + 1}ª`;
     if (e.calle === 'flop') return `Flop${elegidas} · ${e.indice + 1}ª carta`;
     return NOMBRE_CALLE[e.calle];
   }
@@ -167,10 +198,11 @@ export function iniciarMano() {
   // Cartas que no se pueden elegir: todas las conocidas, menos las que se están eligiendo
   // (que se recogen aparte), más las ya elegidas en esta tanda (menos la que se cambia)
   function usadasEligiendo() {
-    const propias = eligiendo.tipo === 'mias'
-      ? (mano.misCartas || [])
-      : (mesaPorCalle(mano.eventos)[eligiendo.calle] || []);
-    const usadas = new Set(cartasConocidas(mano));
+    const propias = eligiendo.tipo === 'mias' ? (mano.misCartas || [])
+      : eligiendo.tipo === 'mostradas' ? mostradasDe(eligiendo.asiento)
+        : (mesaPorCalle(mano.eventos)[eligiendo.calle] || []);
+    // También las que mostraron los demás en el showdown
+    const usadas = new Set([...cartasConocidas(mano), ...cierreActual().mostradas.flatMap((m) => m.cartas)]);
     for (const c of propias) usadas.delete(c);
     eligiendo.cartas.forEach((c, k) => { if (k !== eligiendo.indice && c !== undefined) usadas.add(c); });
     return usadas;
@@ -180,6 +212,11 @@ export function iniciarMano() {
     const botones = [];
     if (eligiendo.tipo === 'mias') {
       botones.push({ texto: 'Quitar', desactivado: !(mano.misCartas || []).length, alTocar: quitarMias });
+      botones.push({ texto: 'Listo', acento: true, alTocar: () => hojaCartas.cerrar() });
+    } else if (eligiendo.tipo === 'mostradas') {
+      const asiento = eligiendo.asiento;
+      botones.push({ texto: 'Quitar', desactivado: !mostradasDe(asiento).length,
+        alTocar: () => { hojaCartas.cerrar(); ponerMostradas(asiento, []); } });
       botones.push({ texto: 'Listo', acento: true, alTocar: () => hojaCartas.cerrar() });
     } else {
       if (eligiendo.nueva) botones.push({ texto: 'Sin cartas', alTocar: calleSinCartas });
@@ -207,6 +244,13 @@ export function iniciarMano() {
     if (e.tipo === 'mias') {
       // Tus cartas se guardan una a una (no son una acción: Deshacer no las quita)
       guardarCartas({ ...mano, misCartas: e.cartas.filter((x) => x !== undefined) });
+      if (e.soloUna || e.cartas.length >= 2) { hojaCartas.cerrar(); return; }
+      e.indice++;
+      hojaCartas.actualizar(opcionesHoja());
+      return;
+    }
+    if (e.tipo === 'mostradas') {
+      ponerMostradas(e.asiento, e.cartas.filter((x) => x !== undefined));
       if (e.soloUna || e.cartas.length >= 2) { hojaCartas.cerrar(); return; }
       e.indice++;
       hojaCartas.actualizar(opcionesHoja());
@@ -256,9 +300,15 @@ export function iniciarMano() {
     if (!mano || ocupado) return;
     const estado = calcularEstado(mano);
     if (estado.fase !== 'fin') return;
+    const cierre = cierreActual();
+    if (estado.motivoFin === 'showdown' && !calcularFinal(mano, estado, cierre).ganadores.length) return;
     ocupado = true;
+    hojaCartas.cerrar();
     try {
-      partida = await terminarMano(mano, partida, estado);
+      const resultado = textoResultado(estado);
+      const numero = mano.numero;
+      partida = (await terminarMano(mano, partida, estado, cierre)).partida;
+      ultimoResultado = { partidaId: partida.id, texto: `Mano ${numero}: ${resultado}` };
       mano = null;
     } catch (error) {
       avisarFallo(error);
@@ -314,7 +364,8 @@ export function iniciarMano() {
     $('mano-estado').textContent = pos
       ? 'Antes de empezar puedes cambiar la mesa (quién juega, fichas…).'
       : 'Tienen que jugar al menos 2 jugadores: cambia la mesa.';
-    $('mano-ultima').textContent = numero > 1 ? 'Mano ' + (numero - 1) + ' guardada ✓' : '';
+    $('mano-ultima').textContent = ultimoResultado ? ultimoResultado.texto + ' Guardada ✓'
+      : (numero > 1 ? 'Mano ' + (numero - 1) + ' guardada ✓' : '');
     $('mano-avisos').innerHTML = '';
 
     mostrarBotones(['btn-empezar-mano']);
@@ -363,12 +414,8 @@ export function iniciarMano() {
         (estado.aPagar > 0 ? ` · paga ${formatear(estado.aPagar)}` : ' · puede pasar');
     } else if (estado.fase === 'cartas') {
       texto = `Se cierra el ${estado.calle}. Toca el ${estado.faltan}.`;
-    } else if (estado.motivoFin === 'retirada') {
-      texto = esYo(estado.ganador)
-        ? `Ganas tú: los demás se retiran. Te llevas ${formatear(estado.bote)}.`
-        : `Gana ${nombreEnMano(estado.ganador)}: los demás se retiran. Se lleva ${formatear(estado.bote)}.`;
     } else {
-      texto = `Showdown con un bote de ${formatear(estado.bote)}. (Elegir el ganador y repartir el bote llega pronto.)`;
+      texto = textoResultado(estado);
     }
     $('mano-estado').textContent = texto;
     $('mano-ultima').textContent = describirUltimo();
@@ -376,10 +423,13 @@ export function iniciarMano() {
     // Avisos del último evento (la app anota lo que pasó, aunque no cuadre)
     const lista = $('mano-avisos');
     lista.innerHTML = '';
-    for (const aviso of estado.avisos.filter((a) => a.evento === mano.eventos.length - 1)) {
+    const avisos = estado.avisos.filter((a) => a.evento === mano.eventos.length - 1).map((a) => a.texto);
+    const botes = avisoBotes(estado);
+    if (botes) avisos.push(botes);
+    for (const aviso of avisos) {
       const li = document.createElement('li');
       li.className = 'aviso';
-      li.textContent = '⚠️ ' + aviso.texto;
+      li.textContent = '⚠️ ' + aviso;
       lista.appendChild(li);
     }
 
@@ -396,6 +446,9 @@ export function iniciarMano() {
       mostrarBotones(['btn-siguiente']);
     }
     for (const id of BOTONES) $(id).disabled = false;
+    // En el showdown, "Siguiente mano" espera a que se elija quién gana
+    $('btn-siguiente').disabled = estado.fase === 'fin' && estado.motivoFin === 'showdown'
+      && !calcularFinal(mano, estado, cierreActual()).ganadores.length;
     $('btn-deshacer').hidden = false;
     $('btn-deshacer').disabled = !puedeDeshacer(mano.eventos);
     pintarCartas();
@@ -405,6 +458,7 @@ export function iniciarMano() {
   function pintarCartas() {
     const fila = $('fila-cartas');
     fila.hidden = !mano;
+    pintarShowdown(mano ? calcularEstado(mano) : null);
     if (!mano) return;
     const estado = calcularEstado(mano);
     const mesa = mesaPorCalle(mano.eventos);
@@ -441,6 +495,74 @@ export function iniciarMano() {
       b.classList.toggle('pendiente', Boolean(eligiendo && eligiendo.tipo === 'mias' && eligiendo.indice === i));
       contMias.appendChild(b);
     }
+  }
+
+  // Showdown: una fila por jugador que llega. Se toca el nombre para marcar quién gana
+  // (uno o varios: el bote se reparte) y los huecos para anotar las cartas que mostró.
+  function pintarShowdown(estado) {
+    const cont = $('showdown');
+    cont.innerHTML = '';
+    const visible = Boolean(estado) && estado.fase === 'fin' && estado.motivoFin === 'showdown';
+    cont.hidden = !visible;
+    if (!visible) return;
+    const cierre = cierreActual();
+    const ganan = new Set(cierre.ganadores);
+    const final = calcularFinal(mano, estado, cierre);
+    const cobra = new Map(final.ganadores.map((g) => [g.asiento, g.cantidad]));
+    for (const asiento of estado.vivos) {
+      const filaJ = document.createElement('div');
+      filaJ.className = 'fila-showdown';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'boton boton-ganador';
+      const gana = ganan.has(asiento);
+      b.setAttribute('aria-pressed', String(gana));
+      const pos = mano.jugadores.find((j) => j.asiento === asiento).posicion;
+      b.textContent = (gana ? '🏆 ' : '') + nombreEnMano(asiento) + ' (' + pos + ')'
+        + (cobra.has(asiento) ? ' · ' + formatear(cobra.get(asiento)) : '');
+      b.addEventListener('click', () => {
+        const nuevos = gana ? cierre.ganadores.filter((a) => a !== asiento) : [...cierre.ganadores, asiento];
+        guardarCierre({ ganadores: nuevos });
+      });
+      filaJ.appendChild(b);
+
+      const cartas = document.createElement('div');
+      cartas.className = 'cartas-mini';
+      const yo = esYo(asiento);
+      const eligiendoAqui = eligiendo && eligiendo.tipo === (yo ? 'mias' : 'mostradas') && (yo || eligiendo.asiento === asiento);
+      const mostradas = eligiendoAqui ? eligiendo.cartas : (yo ? (mano.misCartas || []) : mostradasDe(asiento));
+      for (let i = 0; i < 2; i++) {
+        const nombre = (yo ? 'Tu ' : 'Carta mostrada de ' + nombreEnMano(asiento) + ', ') + (i + 1) + 'ª';
+        const c = cartaMini(mostradas[i], nombre, () => (yo ? abrirMias(i) : abrirMostradas(asiento, i)));
+        c.classList.toggle('pendiente', Boolean(eligiendoAqui && eligiendo.indice === i));
+        cartas.appendChild(c);
+      }
+      filaJ.appendChild(cartas);
+      cont.appendChild(filaJ);
+    }
+  }
+
+  // Quién gana cuánto (antes de cerrar la mano ya se ve cómo quedará)
+  function textoResultado(estado) {
+    const final = calcularFinal(mano, estado, cierreActual());
+    if (!final.ganadores.length) {
+      return `Showdown · bote ${formatear(estado.bote)}. Toca quién gana (si empatan, varios).`;
+    }
+    let t;
+    if (final.ganadores.length === 1) {
+      const g = final.ganadores[0];
+      t = esYo(g.asiento) ? `Ganas tú: te llevas ${formatear(g.cantidad)}.`
+        : `Gana ${nombreEnMano(g.asiento)}: se lleva ${formatear(g.cantidad)}.`;
+      if (final.motivo === 'retirada') t = 'Los demás se retiran. ' + t;
+    } else {
+      t = 'Bote repartido: ' + final.ganadores.map((g) => nombreEnMano(g.asiento) + ' ' + formatear(g.cantidad)).join(' · ') + '.';
+    }
+    if (final.devuelto) {
+      const d = final.devuelto;
+      t += esYo(d.asiento) ? ` Recuperas ${formatear(d.cantidad)} que nadie pagó.`
+        : ` ${nombreEnMano(d.asiento)} recupera ${formatear(d.cantidad)} que nadie pagó.`;
+    }
+    return t;
   }
 
   function cartaMini(c, nombre, alTocar) {

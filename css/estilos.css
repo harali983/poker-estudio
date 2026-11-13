@@ -504,6 +504,13 @@ h2 {
 .carta-mini.flop-ultima { margin-right: 4px; } /* separa el flop del turn y el turn del river */
 .carta-mini.turn { margin-right: 4px; }
 
+/* Showdown: una fila por jugador que llega → [🏆 Ana (BTN) · 5] [carta][carta] */
+.showdown { display: flex; flex-direction: column; gap: 6px; }
+.showdown[hidden] { display: none; }
+.fila-showdown { display: flex; align-items: center; gap: 8px; }
+.boton-ganador { flex: 1; min-width: 0; min-height: 44px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boton-ganador[aria-pressed="true"] { border-color: var(--acento); background: #14361f; color: #c8f7d8; }
+
 /* ===== Teclado de cantidades (hoja inferior) ===== */
 .hoja-cantidad { z-index: 20; }
 .hoja-cantidad .hoja-cabecera { margin-bottom: 4px; }

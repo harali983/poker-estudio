@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.12</p>
+    <p class="version">Versión 0.2.13</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -205,6 +205,8 @@
           <span id="etiqueta-mias" class="etiqueta-cartas">Tú</span>
           <div id="cartas-mias" class="cartas-mini"></div>
         </div>
+        <!-- Showdown: quién gana (uno o varios) y las cartas que mostró cada uno (las pinta pantalla-mano.js) -->
+        <div id="showdown" class="showdown" hidden></div>
         <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
         <!-- Deshacer va encima de las acciones, no en la fila del pulgar: así no se toca sin querer -->
         <div class="fila-deshacer">
