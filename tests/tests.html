@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<!-- tests.html: comprueba que el evaluador de manos y la equidad funcionan.
+     Ábrela con Live Server (los módulos JS no funcionan abriendo el archivo con doble clic).
+     Tarda unos segundos: las pruebas de equidad simulan 200.000 manos cada una. -->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Póker Estudio · Tests</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #0f1115; color: #e8eaed; padding: 16px; }
+    li { margin: 4px 0; }
+    .ok { color: #2ecc71; }
+    .mal { color: #ff5c5c; font-weight: 600; }
+    small { color: #9aa0a6; }
+  </style>
+</head>
+<body>
+  <h1>Tests</h1>
+  <p id="resumen">Ejecutando…</p>
+  <h2>Evaluador de manos</h2>
+  <ul id="lista-evaluador"></ul>
+  <h2>Equidad (200.000 manos por prueba, tolerancia ±1 punto)</h2>
+  <ul id="lista-equidad"></ul>
+  <h2>Web Worker (el mismo cálculo que usa la app)</h2>
+  <ul id="lista-worker"><li>Esperando al worker…</li></ul>
+
+  <script type="module">
+    import { textoACartas } from '../js/cartas.js';
+    import { evaluar, categoria, CATEGORIAS } from '../js/evaluador.js';
+    import { simular } from '../js/equidad.js';
+
+    let correctas = 0;
+    let fallidas = 0;
+
+    function anotar(lista, bien, texto, detalle = '') {
+      bien ? correctas++ : fallidas++;
+      const li = document.createElement('li');
+      li.className = bien ? 'ok' : 'mal';
+      li.innerHTML = (bien ? '✅ ' : '❌ ') + texto + (detalle ? ' <small>' + detalle + '</small>' : '');
+      document.getElementById(lista).appendChild(li);
+      actualizarResumen();
+    }
+
+    function actualizarResumen() {
+      document.getElementById('resumen').textContent =
+        `${correctas} correctas · ${fallidas} fallidas` + (fallidas ? ' ❌' : ' ✅');
+    }
+
+    const ev = (texto) => evaluar(textoACartas(texto));
+    const nombre = (texto) => CATEGORIAS[categoria(ev(texto))];
+
+    // ---- Evaluador ----
+    function gana(a, b, texto) {
+      anotar('lista-evaluador', ev(a) > ev(b), texto, `${a} (${nombre(a)}) > ${b} (${nombre(b)})`);
+    }
+    function empata(a, b, texto) {
+      anotar('lista-evaluador', ev(a) === ev(b), texto, `${a} = ${b}`);
+    }
+    function esCategoria(cartas, esperada, texto) {
+      anotar('lista-evaluador', nombre(cartas) === esperada, texto, `${cartas} → ${nombre(cartas)}`);
+    }
+
+    gana('2h 5h 7h 9h Jh', '5c 6d 7h 8s 9c', 'Color gana a escalera');
+    esCategoria('As 2d 3c 4h 5s', 'Escalera', 'A-2-3-4-5 es escalera');
+    gana('2c 3d 4h 5s 6c', 'As 2d 3c 4h 5s', '2-3-4-5-6 gana a A-2-3-4-5');
+    gana('Tc Jd Qh Ks Ac', '9c Td Jh Qs Kc', 'Escalera al as gana a escalera al rey');
+    esCategoria('Qs Ks As 2d 3c', 'Carta alta', 'Q-K-A-2-3 no es escalera (no da la vuelta)');
+    gana('Ah Ad Ac Kc Kd', 'Ah Kh 9h 7h 4h', 'Full gana a color');
+    gana('5s 6s 7s 8s 9s', 'Ad Ah Ac As Kd', 'Escalera de color gana a póker');
+    esCategoria('Ah 2h 3h 4h 5h', 'Escalera de color', 'A-2-3-4-5 del mismo palo es escalera de color');
+    gana('Ah Ad Kc 7s 3d', 'As Ac Qh 7d 3c', 'Desempate por kicker: AA con K gana a AA con Q');
+    empata('Ah Ad Kc Kd 2c 2d Qs', 'As Ac Ks Kh Qd 3c 4h', 'Tres parejas en 7 cartas: cuentan las dos mejores y la Q de kicker');
+    empata('Ah Ad Ac Kc Kd Ks 2h', 'As Ah Ac Kh Kd 7c 2s', 'Dos tríos en 7 cartas: full de ases con reyes');
+    empata('Ah Kh 9h 7h 4h 2h 3c', 'Ah Kh 9h 7h 4h', 'Color de 6 cartas: cuentan las 5 más altas');
+    esCategoria('Ts Jh Qd Kc Ah Ad 2c', 'Escalera', 'Escalera + pareja en 7 cartas: vale la escalera');
+    gana('Ks Kd Kc 2h 2d', 'Qs Qd Qc Ah Ad', 'Full de reyes gana a full de damas');
+    gana('Ah Ad 9c 9d 2s', 'Kh Kd Qc Qd As', 'Doble pareja A-9 gana a K-Q');
+    empata('2c 3d Ts Jh Qd Kc Ac', '4h 5h Ts Jh Qd Kc Ac', 'La escalera de la mesa reparte el bote');
+
+    // ---- Equidad ----
+    function equidad(mias, rival, rivales, esperada, texto) {
+      const r = simular({
+        mias: textoACartas(mias),
+        rivales,
+        iteraciones: 200000,
+        rivalesConocidos: rival ? [textoACartas(rival)] : [],
+      });
+      const pct = (r.equidad / r.manos) * 100;
+      anotar('lista-equidad', Math.abs(pct - esperada) <= 1, texto,
+        `${pct.toFixed(2)} % (referencia ≈ ${esperada} %)`);
+    }
+
+    equidad('As Ah', 'Ks Kh', 1, 82.0, 'AA contra KK');
+    equidad('As Ks', '2h 2d', 1, 50.0, 'AKs contra 22');
+    equidad('As Ah', null, 1, 85.2, 'AA contra 1 mano al azar');
+    equidad('7c 2d', null, 1, 34.6, '72o contra 1 mano al azar');
+    equidad('As Ah', null, 8, 34.9, 'AA contra 8 manos al azar');
+
+    // ---- Web Worker: comprobar que arranca y responde (como en la app) ----
+    const worker = new Worker(new URL('../js/equidad.worker.js', import.meta.url), { type: 'module' });
+    const inicio = performance.now();
+    worker.onmessage = (e) => {
+      if (!e.data.terminado) return;
+      worker.terminate();
+      document.getElementById('lista-worker').innerHTML = '';
+      const ms = Math.round(performance.now() - inicio);
+      const pct = e.data.equidad * 100;
+      anotar('lista-worker', Math.abs(pct - 85.2) <= 1.5 && ms < 2500,
+        'AA contra 1 mano al azar, en el worker y en menos de 2,5 s',
+        `${pct.toFixed(2)} % ±${(e.data.margen * 100).toFixed(2)} · ${e.data.manos} manos · ${ms} ms`);
+      document.title = 'Tests: ' + (fallidas ? 'FALLAN' : 'OK');
+    };
+    worker.onerror = (e) => {
+      document.getElementById('lista-worker').innerHTML = '';
+      anotar('lista-worker', false, 'El worker no arranca', e.message || '');
+    };
+    worker.postMessage({ mias: textoACartas('As Ah'), mesa: [], rivales: 1 });
+  </script>
+</body>
+</html>
