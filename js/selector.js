@@ -240,6 +240,7 @@ export function crearSelector({ alCambiar }) {
   // Lo que app.js puede usar del selector
   return {
     cartas: obtenerCartas,
+    cerrar,
     vaciar() {
       huecos.fill(null);
       cerrar();

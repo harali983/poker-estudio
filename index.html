@@ -39,10 +39,83 @@
   </div>
 
   <main class="contenedor">
+
+  <!-- ==================== PANTALLA: INICIO ==================== -->
+  <section id="pantalla-inicio" class="pantalla pantalla-inicio">
     <header class="cabecera">
       <h1>♠&#xFE0E; Póker Estudio</h1>
       <!-- Solo se muestra cuando no hay internet -->
       <span id="estado-red" class="estado-red" hidden>✈️ sin conexión</span>
+    </header>
+    <p class="texto-suave">Registra tus partidas y estudia tus decisiones.</p>
+
+    <!-- El menú va abajo, al alcance del pulgar. Son enlaces: cambian el #… de la dirección -->
+    <nav class="menu" aria-label="Menú principal">
+      <a href="#jugar" class="opcion-menu opcion-principal">
+        <span class="opcion-icono" aria-hidden="true">🃏</span>
+        <strong>Jugar</strong>
+        <small>Registrar una partida real</small>
+      </a>
+      <a href="#manos" class="opcion-menu">
+        <span class="opcion-icono" aria-hidden="true">📒</span>
+        <strong>Mis manos</strong>
+        <small>Repasar y exportar</small>
+      </a>
+      <a href="#calculadora" class="opcion-menu">
+        <span class="opcion-icono" aria-hidden="true">🧮</span>
+        <strong>Calculadora</strong>
+        <small>Equidad y pot odds</small>
+      </a>
+      <a href="#ajustes" class="opcion-menu opcion-secundaria">
+        <span class="opcion-icono" aria-hidden="true">⚙️</span>
+        <strong>Ajustes</strong>
+      </a>
+    </nav>
+
+    <p class="version">Versión 0.2.1</p>
+  </section>
+
+  <!-- ==================== PANTALLA: JUGAR ==================== -->
+  <section id="pantalla-jugar" class="pantalla" hidden>
+    <header class="barra-pantalla">
+      <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
+      <h1>Jugar</h1>
+    </header>
+    <div class="tarjeta proximamente">
+      <p><strong>Próximamente.</strong> Aquí prepararás la mesa (jugadores, asientos, botón y ciegas) y registrarás la partida mano a mano.</p>
+      <p class="texto-suave texto-pequeno">Fase 2, paso 3.</p>
+    </div>
+  </section>
+
+  <!-- ==================== PANTALLA: MIS MANOS ==================== -->
+  <section id="pantalla-manos" class="pantalla" hidden>
+    <header class="barra-pantalla">
+      <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
+      <h1>Mis manos</h1>
+    </header>
+    <div class="tarjeta proximamente">
+      <p><strong>Próximamente.</strong> Aquí podrás buscar tus manos, repasarlas paso a paso, ver tus estadísticas y exportarlas.</p>
+      <p class="texto-suave texto-pequeno">Fase 3.</p>
+    </div>
+  </section>
+
+  <!-- ==================== PANTALLA: AJUSTES ==================== -->
+  <section id="pantalla-ajustes" class="pantalla" hidden>
+    <header class="barra-pantalla">
+      <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
+      <h1>Ajustes</h1>
+    </header>
+    <div class="tarjeta proximamente">
+      <p><strong>Próximamente.</strong> Ciegas por defecto y mostrar cantidades en fichas o en ciegas grandes (BB).</p>
+      <p class="texto-suave texto-pequeno">Fase 2, paso 2.</p>
+    </div>
+  </section>
+
+  <!-- ==================== PANTALLA: CALCULADORA (Fase 1) ==================== -->
+  <section id="pantalla-calculadora" class="pantalla" hidden>
+    <header class="barra-pantalla">
+      <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
+      <h1>Calculadora</h1>
     </header>
 
     <!-- ===== 1. RESULTADO (arriba: solo se mira) ===== -->
@@ -94,8 +167,8 @@
     </section>
 
     <button id="btn-nueva-mano" type="button" class="boton boton-ancho">Nueva mano</button>
+  </section>
 
-    <p class="version">Versión 0.2.0</p>
   </main>
 
   <!-- ===== HOJA INFERIOR PARA ELEGIR CARTAS =====
