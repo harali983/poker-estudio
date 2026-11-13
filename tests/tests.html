@@ -22,6 +22,8 @@
   <ul id="lista-evaluador"></ul>
   <h2>Equidad (200.000 manos por prueba, tolerancia ±1 punto)</h2>
   <ul id="lista-equidad"></ul>
+  <h2>Números a la española (campos Bote y A pagar)</h2>
+  <ul id="lista-numeros"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
 
@@ -29,6 +31,7 @@
     import { textoACartas } from '../js/cartas.js';
     import { evaluar, categoria, CATEGORIAS } from '../js/evaluador.js';
     import { simular } from '../js/equidad.js';
+    import { interpretarNumero } from '../js/numeros.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -96,6 +99,27 @@
     equidad('As Ah', null, 1, 85.2, 'AA contra 1 mano al azar');
     equidad('7c 2d', null, 1, 34.6, '72o contra 1 mano al azar');
     equidad('As Ah', null, 8, 34.9, 'AA contra 8 manos al azar');
+
+    // ---- Números a la española ----
+    function numero(texto, esperado, explicacion) {
+      const obtenido = interpretarNumero(texto);
+      anotar('lista-numeros', obtenido === esperado, `"${texto}" → ${esperado}`,
+        explicacion + (obtenido === esperado ? '' : ` (sale ${obtenido})`));
+    }
+
+    numero('1.000', 1000, 'punto de miles');
+    numero('12.500', 12500, 'punto de miles');
+    numero('1.000.000', 1000000, 'varios puntos de miles');
+    numero('1.000,5', 1000.5, 'punto de miles y coma decimal');
+    numero('1.000,50', 1000.5, 'punto de miles y coma decimal');
+    numero('12,5', 12.5, 'coma decimal');
+    numero('1.5', 1.5, 'un punto que no es de miles es el decimal');
+    numero('1.00', 1, 'punto con 2 cifras: decimal');
+    numero(' 100 ', 100, 'espacios alrededor');
+    numero('0', 0, 'cero es válido');
+    numero('', null, 'vacío');
+    numero('abc', null, 'no es un número');
+    numero('-5', null, 'negativo');
 
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----
     const worker = new Worker(new URL('../js/equidad.worker.js', import.meta.url), { type: 'module' });

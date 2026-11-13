@@ -1,6 +1,7 @@
 // app.js: arranque de la app. Une las piezas (selector, jugadores…) y registra el Service Worker.
 
 import { crearSelector } from './selector.js';
+import { interpretarNumero } from './numeros.js';
 
 // ---- 1. Aviso de "sin conexión" ----
 const estadoRed = document.getElementById('estado-red');
@@ -123,12 +124,10 @@ const textoPotOdds = document.getElementById('pot-odds');
 campoBote.addEventListener('input', actualizarPotOdds);
 campoPagar.addEventListener('input', actualizarPotOdds);
 
-// Lee un número escrito con coma o con punto ("12,5" o "12.5"). Devuelve null si no es válido.
+// Lee el número de un campo, a la española ("1.000" = mil, "12,5" = doce y medio; ver numeros.js).
+// Devuelve null si no es válido.
 function leerNumero(campo) {
-  const texto = campo.value.trim().replace(',', '.');
-  if (texto === '') return null;
-  const numero = Number(texto);
-  return Number.isFinite(numero) && numero >= 0 ? numero : null;
+  return interpretarNumero(campo.value);
 }
 
 function actualizarPotOdds() {
