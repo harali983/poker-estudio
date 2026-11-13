@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.8</p>
+    <p class="version">Versión 0.2.9</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -195,14 +195,16 @@
         </div>
       </div>
 
-      <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
-      <p id="mano-ultima" class="texto-suave texto-pequeno centrado"></p>
-      <ul id="mano-avisos" class="mensajes"></ul>
-
-      <!-- Barra de acciones, pegada abajo (al alcance del pulgar) -->
+      <!-- Barra pegada abajo (al alcance del pulgar). Lleva también qué pasa ahora, lo último
+           anotado y los avisos: así se ven siempre, aunque la pantalla sea baja. -->
       <div class="barra-acciones">
-        <!-- Deshacer va encima, no en la fila del pulgar: así no se toca sin querer -->
-        <button id="btn-deshacer" type="button" class="boton boton-pequeno deshacer">↶ Deshacer</button>
+        <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
+        <!-- Deshacer va encima de las acciones, no en la fila del pulgar: así no se toca sin querer -->
+        <div class="fila-deshacer">
+          <button id="btn-deshacer" type="button" class="boton boton-pequeno deshacer">↶ Deshacer</button>
+          <p id="mano-ultima" class="texto-suave texto-pequeno"></p>
+        </div>
+        <ul id="mano-avisos" class="mensajes"></ul>
         <div class="acciones">
           <button id="btn-fold" type="button" class="boton accion accion-fold">Fold</button>
           <button id="btn-check" type="button" class="boton accion">Check</button>
