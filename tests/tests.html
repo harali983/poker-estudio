@@ -410,6 +410,14 @@
         'Acción fuera de turno: aviso, pero se anota', sTurno.avisos[0]?.texto);
       const sCheckDebe = est(m6, ['3 check']);
       ok(sCheckDebe.avisos.some((a) => a.texto.includes('por pagar')), 'Check con algo por pagar: aviso', sCheckDebe.avisos[0]?.texto);
+      const sCallGratis = est(m6, [...limp, '2 call']);
+      const sCheck = est(m6, [...limp, '2 check']);
+      ok(sCallGratis.avisos.some((a) => a.texto.includes('se anota como check')) && sCallGratis.fase === 'cartas'
+        && sCallGratis.bote === sCheck.bote && sCallGratis.jugadores[2].puesto === 2,
+        'Call con 0 por pagar (BB con opción): se trata como check, con aviso', resumen(sCallGratis));
+      const sCallGratisFlop = est(m6, [...limp, '2 check', 'flop', '1 call 5']);
+      ok(sCallGratisFlop.bote === 10 && sCallGratisFlop.turno === 2 && sCallGratisFlop.avisos.length === 1,
+        'Call con 0 por pagar después del flop (aunque traiga cantidad): no pone fichas', resumen(sCallGratisFlop));
       ok(est(m6, ['3 call', 'flop']).avisos.some((a) => a.texto.includes('no se había cerrado')), 'Poner el flop antes de cerrar la calle: aviso');
 
       // Fichas y all-in

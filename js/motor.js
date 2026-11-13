@@ -194,6 +194,11 @@ export function calcularEstado(mano, eventos = mano.eventos) {
         if (aPagar > 0) e.avisos.push({ evento: i, texto: `Check con ${aPagar} por pagar.` });
         break;
       case 'call':
+        // Un call sin nada que pagar es un check (no pone fichas)
+        if (aPagar === 0) {
+          e.avisos.push({ evento: i, texto: 'Call sin nada que pagar: se anota como check.' });
+          break;
+        }
         poner(j, ev.hasta ?? maximaAntes, i);
         break;
       case 'apuesta':
