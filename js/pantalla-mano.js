@@ -17,11 +17,13 @@ import { calcularPosiciones } from './posiciones.js';
 import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
 import { manoEnCurso, empezarMano, guardarMano, terminarMano } from './manos.js';
+import { crearTeclado, pasoDeCiegas, accionDeCantidad } from './teclado.js';
 import { ErrorBD } from './db.js';
 import { mostrarError } from './avisos.js';
 
 const NOMBRE_CALLE = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
-const BOTONES = ['btn-fold', 'btn-check', 'btn-call', 'btn-cartas', 'btn-siguiente', 'btn-empezar-mano'];
+const BOTONES = ['btn-fold', 'btn-check', 'btn-call', 'btn-apostar', 'btn-subir',
+  'btn-cartas', 'btn-siguiente', 'btn-empezar-mano'];
 
 export function iniciarMano() {
   const $ = (id) => document.getElementById(id);
@@ -85,6 +87,29 @@ export function iniciarMano() {
   $('btn-check').addEventListener('click', () => accion('check'));
   $('btn-call').addEventListener('click', () => accion('call'));
 
+  // Apostar / Subir: se abre el teclado y se anota "hasta X" (o all-in)
+  const teclado = crearTeclado();
+  function pedirCantidad() {
+    if (!mano || ocupado) return;
+    const estado = calcularEstado(mano);
+    if (estado.fase !== 'accion') return;
+    const j = estado.jugadores.find((x) => x.asiento === estado.turno);
+    const apuesta = estado.apuestaMaxima === 0;
+    const quien = esYo(estado.turno) ? 'Tú' : nombreEnMano(estado.turno);
+    const eventosAntes = mano.eventos.length;
+    teclado.abrir({
+      titulo: `${quien} (${j.posicion}) · ${apuesta ? 'apostar' : 'subir hasta'}…`,
+      estado,
+      paso: pasoDeCiegas(mano.ciegas),
+      alAnotar(hasta, allin) {
+        if (!mano || mano.eventos.length !== eventosAntes) return; // la mano cambió mientras tanto
+        cambiarEventos([...mano.eventos, eventoDeAccion(estado, accionDeCantidad(estado, allin), hasta)]);
+      },
+    });
+  }
+  $('btn-apostar').addEventListener('click', pedirCantidad);
+  $('btn-subir').addEventListener('click', pedirCantidad);
+
   $('btn-cartas').addEventListener('click', () => {
     if (!mano) return;
     const estado = calcularEstado(mano);
@@ -125,6 +150,7 @@ export function iniciarMano() {
 
   // ---- Pintar ----
   function pintar() {
+    teclado.cerrar();
     $('mano-sin-partida').hidden = Boolean(partida);
     $('mano-contenido').hidden = !partida;
     $('mano-ir-mesa').hidden = !partida;
@@ -227,7 +253,8 @@ export function iniciarMano() {
     // Botones
     if (estado.fase === 'accion') {
       const o = opciones(estado);
-      mostrarBotones([o.fold && 'btn-fold', o.check && 'btn-check', o.call && 'btn-call'].filter(Boolean));
+      mostrarBotones([o.fold && 'btn-fold', o.check && 'btn-check', o.call && 'btn-call',
+        o.apostar && 'btn-apostar', o.subir && 'btn-subir'].filter(Boolean));
       $('btn-call').textContent = 'Call ' + formatear(o.aPagar);
     } else if (estado.fase === 'cartas') {
       mostrarBotones(['btn-cartas']);
@@ -247,9 +274,12 @@ export function iniciarMano() {
     if (ev.tipo === 'mesa') return NOMBRE_CALLE[ev.calle] + '.';
     const yo = esYo(ev.asiento);
     const cantidad = ev.hasta !== undefined ? ' (hasta ' + formatear(ev.hasta) + ')' : '';
+    const n = ev.hasta !== undefined ? formatear(ev.hasta) : '';
     const textos = yo
-      ? { fold: 'te retiras', check: 'pasas', call: 'pagas' + cantidad }
-      : { fold: 'se retira', check: 'pasa', call: 'paga' + cantidad };
+      ? { fold: 'te retiras', check: 'pasas', call: 'pagas' + cantidad,
+        apuesta: 'apuestas ' + n, subida: 'subes hasta ' + n, allin: 'vas all-in' + cantidad }
+      : { fold: 'se retira', check: 'pasa', call: 'paga' + cantidad,
+        apuesta: 'apuesta ' + n, subida: 'sube hasta ' + n, allin: 'va all-in' + cantidad };
     return 'Último: ' + nombreEnMano(ev.asiento) + ' ' + (textos[ev.accion] || ev.accion) + '.';
   }
 
@@ -312,8 +342,9 @@ export function iniciarMano() {
     mostrarError(error instanceof ErrorBD ? error.message : 'Error inesperado en la mano: ' + error.message);
   }
 
-  // Nada queda pendiente (cada acción se guarda al momento), así que no hace falta guardarYa
-  return { alEntrar: cargar };
+  // Nada queda pendiente (cada acción se guarda al momento), así que no hace falta guardarYa.
+  // Una cantidad a medio teclear no es una acción: si sales, se descarta.
+  return { alEntrar: cargar, alSalir: () => teclado.cerrar() };
 }
 
 function formatear(n) {

@@ -32,6 +32,8 @@
   <ul id="lista-posiciones"></ul>
   <h2>Motor de la mano</h2>
   <ul id="lista-motor"></ul>
+  <h2>Cantidades y teclado</h2>
+  <ul id="lista-teclado"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
   <h2>Base de datos (IndexedDB, en una base de datos de prueba aparte)</h2>
@@ -51,6 +53,10 @@
     import { POSICIONES, calcularPosiciones, siguienteBoton } from '../js/posiciones.js';
     import { CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer, eventoDeAccion, eventoDeMesa } from '../js/motor.js';
     import { cerrarMano } from '../js/manos.js';
+    import {
+      teclear, formatearTecleado, leerTecleado, numeroATecleado, pasoDeCiegas, tamanoRapido, maximoAllin,
+      revisarCantidad, accionDeCantidad,
+    } from '../js/teclado.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -482,6 +488,67 @@
       const mShow = jugar(nueva(2, 0), ['0 call', '1 check', 'flop', '1 check', '0 check', 'turn', '1 check', '0 check', 'river', '1 check', '0 check']);
       ok(cerrarMano(mShow, partidaDe(2, 0), calcularEstado(mShow)).mano.final.ganadores.length === 0,
         'Showdown: de momento no se apunta ganador (llega en el paso 9)');
+
+      // ---- Cantidades y teclado (teclado.js) ----
+      {
+        const okT = (bien, texto, detalle = '') => anotar('lista-teclado', bien, texto, detalle);
+        // Teclear
+        const tecleo = (teclas) => teclas.split(' ').reduce((t, k) => teclear(t, k), '');
+        okT(formatearTecleado(tecleo('1 0 0 0')) === '1.000' && leerTecleado(tecleo('1 0 0 0')) === 1000,
+          'Teclear 1 0 0 0: se ve "1.000" y vale 1000');
+        okT(formatearTecleado(tecleo('1 2 5 0 0 , 5')) === '12.500,5' && leerTecleado(tecleo('1 2 5 0 0 , 5')) === 12500.5,
+          'Con coma decimal: "12.500,5" vale 12500,5');
+        okT(tecleo('0 0 7') === '7' && tecleo(', 5') === '0,5' && tecleo('1 , 2 , 3') === '1,23' && tecleo('1 , 2 3 4') === '1,23',
+          'Sin ceros a la izquierda, una sola coma y como mucho 2 decimales');
+        okT(tecleo('4 5 ⌫') === '4' && leerTecleado('') === null && leerTecleado('7,') === 7, 'Borrar; vacío = sin cantidad; "7," vale 7');
+        okT(numeroATecleado(1000.5) === '1000,5' && numeroATecleado(5.333333) === '5,33', 'Un número se pasa a teclado con coma y 2 decimales como mucho');
+
+        // Tamaños rápidos (ciegas 1/2: se redondea de 1 en 1)
+        const paso = pasoDeCiegas({ sb: 1, bb: 2 });
+        const t = (s, f) => tamanoRapido(s, f, paso).hasta;
+        okT(paso === 1 && pasoDeCiegas({ sb: 0.5, bb: 1 }) === 0.5 && pasoDeCiegas({ sb: 0, bb: 2 }) === 2,
+          'Redondeo: a la ficha más pequeña de las ciegas (1/2 → 1; 0,5/1 → 0,5)');
+        okT(t(s0, 1) === 7 && t(s0, 1 / 2) === 5 && t(s0, 2 / 3) === 5,
+          'Preflop 1/2, el UTG sube: bote → hasta 7; ½ → 5 (4,5 redondeado); ⅔ → 5 (5,33)', `${t(s0, 1)} · ${t(s0, 1 / 2)} · ${t(s0, 2 / 3)}`);
+        okT(t(sPost, 1 / 2) === 5 && t(sPost, 2 / 3) === 7 && t(sPost, 1) === 10,
+          'Flop con bote 10 y sin apuestas: ½ → 5, ⅔ → 7 (6,67), bote → 10', `${t(sPost, 1 / 2)} · ${t(sPost, 2 / 3)} · ${t(sPost, 1)}`);
+        const sFrente6 = est(m6, [...limp, '2 check', 'flop', '1 check', '2 apuesta 6']);
+        okT(t(sFrente6, 1) === 28 && t(sFrente6, 1 / 2) === 17,
+          'Ante una apuesta de 6 con bote 16: subir el bote → hasta 28 (paga 6 y sube 22); ½ → 17', `${t(sFrente6, 1)} · ${t(sFrente6, 1 / 2)}`);
+        const sMedio = { turno: 0, bote: 2, aPagar: 0, apuestaMaxima: 0, subidaMinima: 2, jugadores: [{ asiento: 0, puesto: 0, fichas: null }] };
+        const rMedio = tamanoRapido(sMedio, 1 / 2, 1);
+        okT(rMedio.hasta === 2 && rMedio.ajuste === 'minima', 'Si la fracción no llega a la mínima, se sube a la mínima', JSON.stringify(rMedio));
+        // La BB empezó con 15 fichas: ante una subida a 6, "bote" sería hasta 19
+        const sCorto2 = est(nueva(3, 0, { fichas: [100, 100, 15] }), ['0 subida 6', '1 fold']);
+        const rCorto = tamanoRapido(sCorto2, 1, paso);
+        const rCortoMedio = tamanoRapido(sCorto2, 1 / 2, paso);
+        okT(rCorto.hasta === 15 && rCorto.allin && rCorto.ajuste === 'allin' && maximoAllin(sCorto2) === 15
+          && rCortoMedio.hasta === 13 && !rCortoMedio.allin,
+          'Con 15 fichas: "bote" (19) se limita a su all-in (15); ½ bote (13) no', JSON.stringify(rCorto) + ' · ½ ' + rCortoMedio.hasta);
+        okT(maximoAllin(s0) === null, 'Sin llevar fichas no hay all-in conocido');
+
+        // Revisar la cantidad tecleada
+        const rv = (s, v, a) => revisarCantidad(s, v, a);
+        okT(rv(s0, 6).puedeAnotar && !rv(s0, 6).aviso && !rv(s0, 6).allin, 'Subir hasta 6 (mínimo 4): se anota sin aviso');
+        okT(rv(s0, 3).puedeAnotar && rv(s0, 3).aviso.includes('mínima'), 'Subir hasta 3 (mínimo 4): se puede anotar, con aviso', rv(s0, 3).aviso);
+        okT(!rv(s0, 2).puedeAnotar && rv(s0, 2).error.includes('Call'), 'Subir "hasta 2" cuando ya hay 2: no es una subida (usa Call)', rv(s0, 2).error);
+        okT(!rv(s0, null).puedeAnotar && !rv(s0, 0).puedeAnotar, 'Sin cantidad o 0: no se puede anotar');
+        const rAll = rv(sCorto2, 500);
+        okT(rAll.puedeAnotar && rAll.allin && rAll.hasta === 15 && rAll.aviso.includes('all-in'), 'Más fichas de las que tiene: se anota all-in por lo que tiene', JSON.stringify(rAll));
+        const sCorto3 = est(nueva(3, 0, { fichas: [100, 100, 5] }), ['0 subida 20', '1 fold']);
+        okT(rv(sCorto3, 5).puedeAnotar && rv(sCorto3, 5).allin, 'All-in por menos de lo que hay que pagar (5 contra 20): se puede anotar');
+        okT(rv(s0, 10, true).allin && rv(s0, 1, true).puedeAnotar && !rv(s0, 1, false).puedeAnotar,
+          'Sin llevar fichas, "All-in" + cantidad: se anota all-in aunque no supere la apuesta');
+        okT(accionDeCantidad(sPost, false) === 'apuesta' && accionDeCantidad(s0, false) === 'subida' && accionDeCantidad(s0, true) === 'allin',
+          'Sin apuesta previa es "apuesta"; con apuesta, "subida"; y all-in si lo es');
+
+        // Y el motor con lo que anota el teclado
+        const conSubida = jugar(m6, []);
+        conSubida.eventos.push(eventoDeAccion(s0, accionDeCantidad(s0, false), rv(s0, 7).hasta));
+        const sTras = calcularEstado(conSubida);
+        okT(sTras.apuestaMaxima === 7 && sTras.turno === 4 && sTras.aPagar === 7 && sTras.subidaMinima === 12 && sTras.avisos.length === 0,
+          'El UTG sube hasta 7: el siguiente paga 7 y la subida mínima pasa a 12', resumen(sTras));
+      }
     }
 
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----

@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.9</p>
+    <p class="version">Versión 0.2.10</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -209,11 +209,46 @@
           <button id="btn-fold" type="button" class="boton accion accion-fold">Fold</button>
           <button id="btn-check" type="button" class="boton accion">Check</button>
           <button id="btn-call" type="button" class="boton accion accion-call">Call</button>
+          <button id="btn-apostar" type="button" class="boton accion accion-subir">Apostar</button>
+          <button id="btn-subir" type="button" class="boton accion accion-subir">Subir</button>
           <button id="btn-cartas" type="button" class="boton accion boton-acento">Pasar al flop</button>
           <button id="btn-siguiente" type="button" class="boton accion boton-acento">Siguiente mano</button>
           <button id="btn-empezar-mano" type="button" class="boton accion boton-acento">Empezar mano</button>
         </div>
       </div>
+    </div>
+
+    <!-- Teclado de cantidades (hoja inferior). Lo maneja teclado.js.
+         Arriba lo que se mira (cantidad, avisos); abajo lo que se toca (tamaños, cifras, Anotar). -->
+    <div id="hoja-cantidad" class="hoja hoja-cantidad" role="dialog" aria-labelledby="cantidad-titulo" aria-hidden="true">
+      <div class="hoja-cabecera">
+        <span id="cantidad-titulo" class="hoja-titulo">Subir hasta…</span>
+        <button id="cantidad-cancelar" type="button" class="boton boton-pequeno">Cancelar</button>
+      </div>
+      <div class="cantidad-pantalla" aria-live="polite"><span id="cantidad-valor">0</span></div>
+      <p id="cantidad-info" class="texto-suave texto-pequeno centrado"></p>
+      <p id="cantidad-aviso" class="aviso-campo centrado"></p>
+      <div class="tamanos">
+        <button id="tamano-medio" type="button" class="boton tecla-tamano">½ bote<small></small></button>
+        <button id="tamano-dostercios" type="button" class="boton tecla-tamano">⅔ bote<small></small></button>
+        <button id="tamano-bote" type="button" class="boton tecla-tamano">Bote<small></small></button>
+        <button id="tamano-allin" type="button" class="boton tecla-tamano tecla-allin">All-in<small></small></button>
+      </div>
+      <div class="teclado-cifras">
+        <button type="button" class="boton tecla" data-tecla="1">1</button>
+        <button type="button" class="boton tecla" data-tecla="2">2</button>
+        <button type="button" class="boton tecla" data-tecla="3">3</button>
+        <button type="button" class="boton tecla" data-tecla="4">4</button>
+        <button type="button" class="boton tecla" data-tecla="5">5</button>
+        <button type="button" class="boton tecla" data-tecla="6">6</button>
+        <button type="button" class="boton tecla" data-tecla="7">7</button>
+        <button type="button" class="boton tecla" data-tecla="8">8</button>
+        <button type="button" class="boton tecla" data-tecla="9">9</button>
+        <button type="button" class="boton tecla" data-tecla=",">,</button>
+        <button type="button" class="boton tecla" data-tecla="0">0</button>
+        <button type="button" class="boton tecla" data-tecla="⌫" aria-label="Borrar">⌫</button>
+      </div>
+      <button id="cantidad-anotar" type="button" class="boton boton-ancho boton-acento">Subir</button>
     </div>
   </section>
 
