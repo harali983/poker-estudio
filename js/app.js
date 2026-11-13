@@ -8,6 +8,7 @@ import { iniciarCalculadora } from './pantalla-calculadora.js';
 import { iniciarAjustes } from './pantalla-ajustes.js';
 import { iniciarInicio } from './pantalla-inicio.js';
 import { iniciarMesa } from './pantalla-mesa.js';
+import { iniciarMano } from './pantalla-mano.js';
 import { bd, pedirPersistencia } from './db.js';
 import { mostrarError } from './avisos.js';
 
@@ -54,7 +55,7 @@ if ('serviceWorker' in navigator) {
 document.getElementById('btn-recargar').addEventListener('click', () => location.reload());
 
 // ---- 3. Navegación entre pantallas ----
-const PANTALLAS = ['inicio', 'jugar', 'manos', 'calculadora', 'ajustes'];
+const PANTALLAS = ['inicio', 'jugar', 'mano', 'manos', 'calculadora', 'ajustes'];
 
 // Cada pantalla con lógica se prepara la primera vez que se abre.
 // Lo que devuelve ({ alEntrar, alSalir }, ambos opcionales) se guarda aquí.
@@ -62,6 +63,7 @@ const preparadas = {};
 const INICIAR = {
   inicio: iniciarInicio,
   jugar: iniciarMesa,
+  mano: iniciarMano,
   calculadora: iniciarCalculadora,
   ajustes: iniciarAjustes,
 };

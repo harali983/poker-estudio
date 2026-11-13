@@ -3,8 +3,6 @@
 
 import { bd } from './db.js';
 import { resolverJugadores, crearPartida, actualizarPartida } from './mesa.js';
-import { siguienteBoton } from './posiciones.js';
-
 const CLAVE_BORRADOR = 'borradorMesa'; // mesa a medio preparar (se guarda en "ajustes")
 
 /** La partida en curso (o null si no hay). Si hubiera varias, la más reciente. */
@@ -52,16 +50,6 @@ export async function guardarMesa(borrador, partidaExistente) {
 
   await bd.guardarJuntos({ jugadores, partidas: [partida] });
   return partida;
-}
-
-/**
- * "Siguiente mano": mueve el botón al siguiente asiento que juega y lo guarda al momento.
- * (Desde el paso 9, el fin de cada mano registrada hará esto mismo.)
- */
-export async function siguienteMano(partida) {
-  const nueva = { ...partida, boton: siguienteBoton(partida.asientos, partida.boton) };
-  await bd.guardar('partidas', nueva);
-  return nueva;
 }
 
 /** Termina la partida en curso (sigue guardada, pero ya no aparece "Continuar partida"). */

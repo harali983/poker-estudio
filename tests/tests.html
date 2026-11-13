@@ -49,7 +49,8 @@
       validarMesa, resolverJugadores, crearPartida, borradorDePartida, cambiarJuega,
     } from '../js/mesa.js';
     import { POSICIONES, calcularPosiciones, siguienteBoton } from '../js/posiciones.js';
-    import { CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer } from '../js/motor.js';
+    import { CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer, eventoDeAccion, eventoDeMesa } from '../js/motor.js';
+    import { cerrarMano } from '../js/manos.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -448,6 +449,39 @@
       while (puedeDeshacer(eventos)) eventos = deshacer(eventos);
       ok(eventos.length === 2 && JSON.stringify(calcularEstado({ ...m6, eventos })) === JSON.stringify(s0),
         'Deshacer varias veces seguidas llega al principio; las ciegas no se deshacen', eventos.length + ' eventos');
+
+      // Eventos que crea la pantalla (paso 6)
+      const evCall = eventoDeAccion(s0, 'call');
+      ok(JSON.stringify(evCall) === '{"tipo":"accion","calle":"preflop","asiento":3,"accion":"call","hasta":2}',
+        'El call de la pantalla guarda el "hasta" que iguala', JSON.stringify(evCall));
+      const evCallCorto = eventoDeAccion(sCorto, 'call');
+      ok(evCallCorto.hasta === 50, 'Call del SB contra una subida a 50 (le llega): hasta 50', JSON.stringify(evCallCorto));
+      const sBBdebe = est(nueva(3, 0, { fichas: [100, 100, 30] }), ['0 subida 50', '1 fold']);
+      ok(eventoDeAccion(sBBdebe, 'call').hasta === 30, 'Call con menos fichas de las que hay que pagar: hasta lo que tiene (30)',
+        JSON.stringify(eventoDeAccion(sBBdebe, 'call')));
+      ok(JSON.stringify(eventoDeAccion(s0, 'fold')) === '{"tipo":"accion","calle":"preflop","asiento":3,"accion":"fold"}',
+        'Fold de la pantalla: sin cantidad');
+      const evFlop = eventoDeMesa(sFlop);
+      const sSinCartas = calcularEstado({ ...m6, eventos: [...jugar(m6, [...limp, '2 check']).eventos, evFlop] });
+      ok(evFlop.calle === 'flop' && evFlop.cartas.length === 0 && sSinCartas.calle === 'flop' && sSinCartas.avisos.length === 0,
+        'Pasar al flop sin anotar las cartas: se permite, sin aviso', JSON.stringify(evFlop));
+      ok(est(m6, [...limp, '2 check']).avisos.length === 0 && calcularEstado({ ...m6, eventos: [...jugar(m6, [...limp, '2 check']).eventos, { tipo: 'mesa', calle: 'flop', cartas: [1, 2] }] }).avisos.length === 1,
+        'Un flop con 2 cartas (no 0 ni 3): aviso');
+
+      // Cerrar la mano (manos.js)
+      const pCierre = { ...partidaDe(6, 0), manosJugadas: 4 };
+      const mCierre = jugar(crearMano(pCierre, { id: 'm5', numero: 5, fecha: 'x' }), ['3 fold', '4 fold', '5 fold', '0 fold', '1 fold']);
+      const cerrada = cerrarMano(mCierre, pCierre, calcularEstado(mCierre));
+      ok(JSON.stringify(cerrada.mano.final) === '{"motivo":"retirada","ganadores":[{"asiento":2,"cantidad":3}],"mostradas":[]}'
+        && cerrada.partida.boton === 1 && cerrada.partida.manosJugadas === 5,
+        'Cerrar la mano: gana la BB (se lleva el bote), el botón avanza y se cuenta la mano',
+        JSON.stringify(cerrada.mano.final) + ' · botón ' + cerrada.partida.boton);
+      const pFuera = { ...partidaDe(6, 0, { fuera: [1] }), manosJugadas: 0 };
+      const mFuera2 = jugar(crearMano(pFuera, { id: 'm1', numero: 1, fecha: 'x' }), ['4 fold', '5 fold', '0 fold', '2 fold']);
+      ok(cerrarMano(mFuera2, pFuera, calcularEstado(mFuera2)).partida.boton === 2, 'Cerrar la mano: el botón se salta al que no juega (0 → 2)');
+      const mShow = jugar(nueva(2, 0), ['0 call', '1 check', 'flop', '1 check', '0 check', 'turn', '1 check', '0 check', 'river', '1 check', '0 check']);
+      ok(cerrarMano(mShow, partidaDe(2, 0), calcularEstado(mShow)).mano.final.ganadores.length === 0,
+        'Showdown: de momento no se apunta ganador (llega en el paso 9)');
     }
 
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----

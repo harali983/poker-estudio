@@ -241,7 +241,8 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     } else if (ev.calle !== e.faltan) {
       e.avisos.push({ evento: i, texto: `Se esperaba el ${e.faltan}, no el ${ev.calle}.` });
     }
-    if (ev.cartas && CARTAS_POR_CALLE[ev.calle] && ev.cartas.length !== CARTAS_POR_CALLE[ev.calle]) {
+    // Sin cartas ([]) = la calle se anota sin saber qué cartas salieron (se permite)
+    if (ev.cartas && ev.cartas.length > 0 && CARTAS_POR_CALLE[ev.calle] && ev.cartas.length !== CARTAS_POR_CALLE[ev.calle]) {
       e.avisos.push({ evento: i, texto: `El ${ev.calle} tiene ${CARTAS_POR_CALLE[ev.calle]} carta(s).` });
     }
     e.calle = ev.calle;
@@ -325,6 +326,27 @@ export function opciones(estado) {
     aPagar,
     subidaMinima: estado.subidaMinima,
   };
+}
+
+/**
+ * Evento de la acción del jugador al que le toca. En un call se guarda el "hasta" que
+ * resulta (lo que había que igualar, o sus fichas si no le llegan), para que la lista de
+ * eventos se lea sola: "Ana paga hasta 6".
+ */
+export function eventoDeAccion(estado, accion, hasta) {
+  const ev = { tipo: 'accion', calle: estado.calle, asiento: estado.turno, accion };
+  if (accion === 'call') {
+    const j = estado.jugadores.find((x) => x.asiento === estado.turno);
+    ev.hasta = j.puesto + estado.aPagar;
+  } else if (hasta !== undefined) {
+    ev.hasta = hasta;
+  }
+  return ev;
+}
+
+/** Evento de las cartas de la calle que falta. Sin cartas ([]) si no se anotan. */
+export function eventoDeMesa(estado, cartas = []) {
+  return { tipo: 'mesa', calle: estado.faltan, cartas };
 }
 
 /** ¿Hay algo que deshacer? Las antes y las ciegas no se deshacen: las pone la app. */

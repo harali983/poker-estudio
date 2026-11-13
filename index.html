@@ -58,7 +58,7 @@
     <!-- El menú va abajo, al alcance del pulgar. Son enlaces: cambian el #… de la dirección -->
     <nav class="menu" aria-label="Menú principal">
       <!-- Solo se ve si hay una partida en curso (pantalla-inicio.js) -->
-      <a href="#jugar" id="continuar-partida" class="opcion-menu opcion-continuar" hidden>
+      <a href="#mano" id="continuar-partida" class="opcion-menu opcion-continuar" hidden>
         <strong>▶ Continuar partida</strong>
         <small id="continuar-detalle"></small>
       </a>
@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.7</p>
+    <p class="version">Versión 0.2.8</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -164,11 +164,55 @@
     <ul id="mesa-mensajes" class="mensajes" aria-live="polite"></ul>
     <p id="mesa-guardado" class="guardado" aria-live="polite"></p>
     <button id="btn-empezar" type="button" class="boton boton-ancho boton-acento">Empezar partida</button>
-    <div id="bloque-siguiente" hidden>
-      <button id="btn-siguiente-mano" type="button" class="boton boton-ancho">Siguiente mano · mover el botón</button>
-      <p id="siguiente-pista" class="texto-suave texto-pequeno centrado" hidden>Guarda los cambios antes de pasar a la siguiente mano.</p>
+    <div id="bloque-volver-mano" hidden>
+      <a href="#mano" class="boton boton-ancho enlace-boton">Volver a la mano ›</a>
+      <p id="mesa-pista-mano" class="texto-suave texto-pequeno centrado" hidden>Hay una mano en curso: los cambios de la mesa se aplican desde la próxima mano.</p>
     </div>
     <button id="btn-terminar" type="button" class="boton boton-ancho boton-peligro" hidden>Terminar partida</button>
+  </section>
+
+  <!-- ==================== PANTALLA: MANO ==================== -->
+  <!-- Registrar la mano en curso. Arriba se mira (mesa, turno, bote); abajo se toca (acciones). -->
+  <section id="pantalla-mano" class="pantalla pantalla-mano" hidden>
+    <header class="barra-pantalla">
+      <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
+      <h1 id="mano-titulo">Mano</h1>
+      <a href="#jugar" id="mano-ir-mesa" class="boton boton-pequeno volver barra-derecha">Mesa</a>
+    </header>
+
+    <div id="mano-sin-partida" class="tarjeta" hidden>
+      <p>No hay ninguna partida en curso.</p>
+      <a href="#jugar" class="boton boton-ancho boton-acento enlace-boton">Preparar la mesa</a>
+    </div>
+
+    <div id="mano-contenido">
+      <!-- Los asientos, la ficha del botón y las apuestas los dibuja pantalla-mano.js -->
+      <div id="mano-ovalo" class="mesa-ovalada">
+        <div class="tapete" aria-hidden="true"></div>
+        <div class="centro-mesa">
+          <span id="mano-calle"></span>
+          <strong id="mano-bote"></strong>
+        </div>
+      </div>
+
+      <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
+      <p id="mano-ultima" class="texto-suave texto-pequeno centrado"></p>
+      <ul id="mano-avisos" class="mensajes"></ul>
+
+      <!-- Barra de acciones, pegada abajo (al alcance del pulgar) -->
+      <div class="barra-acciones">
+        <!-- Deshacer va encima, no en la fila del pulgar: así no se toca sin querer -->
+        <button id="btn-deshacer" type="button" class="boton boton-pequeno deshacer">↶ Deshacer</button>
+        <div class="acciones">
+          <button id="btn-fold" type="button" class="boton accion accion-fold">Fold</button>
+          <button id="btn-check" type="button" class="boton accion">Check</button>
+          <button id="btn-call" type="button" class="boton accion accion-call">Call</button>
+          <button id="btn-cartas" type="button" class="boton accion boton-acento">Pasar al flop</button>
+          <button id="btn-siguiente" type="button" class="boton accion boton-acento">Siguiente mano</button>
+          <button id="btn-empezar-mano" type="button" class="boton accion boton-acento">Empezar mano</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ==================== PANTALLA: MIS MANOS ==================== -->

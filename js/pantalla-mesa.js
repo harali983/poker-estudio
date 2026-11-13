@@ -11,9 +11,10 @@ import {
 } from './mesa.js';
 import { calcularPosiciones } from './posiciones.js';
 import {
-  partidaEnCurso, rivalesConocidos, nombresDeJugadores, guardarMesa, terminarPartida, siguienteMano,
+  partidaEnCurso, rivalesConocidos, nombresDeJugadores, guardarMesa, terminarPartida,
   leerBorrador, guardarBorrador, borrarBorrador,
 } from './partidas.js';
+import { manoEnCurso } from './manos.js';
 import { leerAjustes } from './ajustes.js';
 import { interpretarNumero } from './numeros.js';
 import { ErrorBD } from './db.js';
@@ -38,6 +39,7 @@ export function iniciarMesa() {
 
   let borrador = null;     // la mesa tal y como está en pantalla
   let partida = null;      // partida en curso (si la hay: modo "editar")
+  let hayManoEnCurso = false; // si la hay, los cambios valen desde la próxima mano
   let conocidos = [];      // rivales ya guardados (para elegirlos con un toque)
   let seleccionado = null; // asiento abierto en el editor
   let sinGuardar = false;  // en modo editar: hay cambios sin guardar
@@ -47,6 +49,7 @@ export function iniciarMesa() {
   async function cargar() {
     try {
       partida = await partidaEnCurso();
+      hayManoEnCurso = partida ? Boolean(await manoEnCurso(partida.id)) : false;
       conocidos = await rivalesConocidos();
       const guardado = await leerBorrador(partida ? partida.id : null);
       if (partida) {
@@ -277,7 +280,7 @@ export function iniciarMesa() {
       const guardada = await guardarMesa(borrador, partida);
       await borrarBorrador(eraNueva ? null : partida.id);
       if (eraNueva) {
-        location.hash = '#inicio'; // allí aparece "Continuar partida"
+        location.hash = '#mano'; // a empezar la primera mano
         return;
       }
       partida = guardada;
@@ -285,22 +288,6 @@ export function iniciarMesa() {
       sinGuardar = false;
       textoGuardado.textContent = 'Cambios guardados ✓';
       setTimeout(() => { textoGuardado.textContent = ''; }, 2000);
-    } catch (error) {
-      avisarFallo(error);
-    }
-    pintar();
-  });
-
-  // "Siguiente mano": el botón pasa al siguiente que juega y se guarda al momento
-  $('btn-siguiente-mano').addEventListener('click', async () => {
-    if (!partida || sinGuardar) return;
-    const btn = $('btn-siguiente-mano');
-    btn.disabled = true;
-    try {
-      partida = await siguienteMano(partida);
-      borrador = ponerBoton(borrador, partida.boton);
-      textoGuardado.textContent = 'El botón pasa a: ' + nombreDeAsiento(borrador, partida.boton) + ' ✓';
-      setTimeout(() => { textoGuardado.textContent = ''; }, 2500);
     } catch (error) {
       avisarFallo(error);
     }
@@ -348,9 +335,8 @@ export function iniciarMesa() {
     btnPrincipal.textContent = partida ? 'Guardar cambios' : 'Empezar partida';
     btnPrincipal.disabled = errores.length > 0 || (Boolean(partida) && !sinGuardar);
     btnTerminar.hidden = !partida;
-    $('bloque-siguiente').hidden = !partida;
-    $('btn-siguiente-mano').disabled = sinGuardar;
-    $('siguiente-pista').hidden = !sinGuardar;
+    $('bloque-volver-mano').hidden = !partida;
+    $('mesa-pista-mano').hidden = !hayManoEnCurso;
   }
 
   function avisarFallo(error) {

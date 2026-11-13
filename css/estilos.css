@@ -411,6 +411,58 @@ h2 {
 .mensajes li.error { color: var(--malo); }
 .mensajes li.aviso { color: #f5c451; }
 
+/* ===== Mano en curso ===== */
+.barra-derecha { margin-left: auto; }
+.enlace-boton { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.centro-mesa {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+.centro-mesa span { font-size: 0.75rem; color: #cfe9da; text-transform: uppercase; letter-spacing: 0.06em; }
+.centro-mesa strong { font-size: 1.25rem; }
+.asiento-mano { cursor: default; }
+.asiento-mano:active { transform: translate(-50%, -50%); }
+/* A quién le toca: borde y halo amarillos, bien visibles */
+.asiento-mesa.turno { border-color: #f5c451; background: #3a3420; box-shadow: 0 0 0 4px rgba(245, 196, 81, 0.4); }
+.asiento-mesa.retirado { opacity: 0.35; }
+/* Lo puesto en esta calle: entre el asiento y el centro */
+.apuesta-mesa {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #0d2a1b;
+  border: 1px solid #f5c451;
+  color: #f5c451;
+  font-size: 0.8rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+.mano-estado { text-align: center; font-size: 1.05rem; font-weight: 600; margin: 4px 0; min-height: 1.4em; }
+#mano-ultima { margin: 0; min-height: 1.2em; }
+/* Barra de acciones: pegada abajo de la pantalla mientras se desplaza */
+.barra-acciones {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  background: var(--fondo);
+}
+.acciones { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.accion { min-height: 60px; font-size: 1.15rem; font-weight: 700; }
+.accion-fold { background: #4a2328; color: #ffc2c2; }
+.accion-call { background: #1f3a5a; }
+.deshacer { align-self: flex-start; }
+
 /* ===== Ajustes ===== */
 .aviso-campo { margin: 8px 0 0; color: #f5c451; font-size: 0.9rem; }
 .aviso-campo.aviso-campo-error { color: var(--malo); }
