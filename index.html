@@ -14,14 +14,11 @@
   <!-- Color de la barra superior del sistema -->
   <meta name="theme-color" content="#0f1115">
 
-  <!-- Icono de la pestaña del navegador (favicon). Sin esto, el navegador
-       busca "favicon.ico" por su cuenta y da un error 404 en la consola. -->
+  <!-- Icono de la pestaña del navegador (favicon) -->
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
   <!-- Metaetiquetas para la app instalada (pantalla completa).
-       "mobile-web-app-capable" es el nombre estándar actual;
-       "apple-mobile-web-app-capable" está marcado como obsoleto, pero lo
-       mantenemos porque Safari en iPhone todavía lo necesita. -->
+       "apple-mobile-web-app-capable" está obsoleto, pero Safari en iPhone todavía lo necesita. -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -35,42 +32,85 @@
   <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
+  <!-- Barra que aparece cuando se ha descargado una versión nueva de la app -->
+  <div id="aviso-version" class="aviso-version" hidden>
+    <span>Hay una versión nueva</span>
+    <button id="btn-recargar" type="button" class="boton boton-pequeno">Recargar</button>
+  </div>
+
   <main class="contenedor">
-    <h1>♠ Póker Estudio</h1>
-    <p>¡Hola! Si ves esto en tu iPhone, la Fase 0 funciona.</p>
+    <header class="cabecera">
+      <h1>♠&#xFE0E; Póker Estudio</h1>
+      <!-- Solo se muestra cuando no hay internet -->
+      <span id="estado-red" class="estado-red" hidden>✈️ sin conexión</span>
+    </header>
 
-    <div class="tarjeta">
-      <p>Estado de la conexión: <strong id="estado-red">comprobando…</strong></p>
-      <p>Modo sin conexión: <strong id="estado-sw">comprobando…</strong></p>
-    </div>
+    <!-- ===== 1. RESULTADO (arriba: solo se mira) ===== -->
+    <section class="tarjeta resultado" id="resultado" aria-live="polite">
+      <p id="resultado-vacio" class="texto-suave">Elige tus dos cartas para ver tu equidad.</p>
+      <div id="resultado-datos" hidden>
+        <p class="equidad"><span id="equidad">–</span> <small id="margen"></small></p>
+        <p class="texto-suave">Ganar <strong id="ganar">–</strong> · Empatar <strong id="empatar">–</strong></p>
+        <div class="barra"><div id="barra-progreso" class="barra-relleno"></div></div>
+        <p class="texto-suave texto-pequeno" id="manos-simuladas"></p>
+      </div>
+    </section>
 
-    <p class="version">Versión 0.0.2</p>
+    <!-- ===== 2. CARTAS ===== -->
+    <section class="tarjeta">
+      <h2>Tu mano</h2>
+      <div class="huecos" id="huecos-mano"></div>
+
+      <h2>Mesa</h2>
+      <div class="huecos" id="huecos-mesa"></div>
+      <div class="huecos etiquetas">
+        <span class="etiqueta-flop">Flop</span>
+        <span>Turn</span>
+        <span>River</span>
+      </div>
+    </section>
+
+    <!-- ===== 3. CONTROLES (abajo: al alcance del pulgar) ===== -->
+    <section class="tarjeta controles">
+      <div class="fila">
+        <span>Jugadores</span>
+        <div class="contador">
+          <button id="btn-menos" type="button" class="boton boton-redondo" aria-label="Menos jugadores">−</button>
+          <strong id="num-jugadores">2</strong>
+          <button id="btn-mas" type="button" class="boton boton-redondo" aria-label="Más jugadores">+</button>
+        </div>
+      </div>
+
+      <div class="fila campos">
+        <label>Bote
+          <input id="bote" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        </label>
+        <label>A pagar
+          <input id="pagar" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        </label>
+      </div>
+      <p id="pot-odds" class="pot-odds" hidden></p>
+    </section>
+
+    <button id="btn-nueva-mano" type="button" class="boton boton-ancho">Nueva mano</button>
+
+    <p class="version">Versión 0.1.1</p>
   </main>
 
-  <script>
-    // ---- 1. Mostrar si hay internet o no ----
-    const estadoRed = document.getElementById('estado-red');
-    function actualizarRed() {
-      estadoRed.textContent = navigator.onLine ? 'con internet' : 'sin internet ✈️';
-    }
-    actualizarRed();
-    window.addEventListener('online', actualizarRed);   // se avisa al recuperar la red
-    window.addEventListener('offline', actualizarRed);  // y al perderla
+  <!-- ===== HOJA INFERIOR PARA ELEGIR CARTAS =====
+       Está fuera de <main> para poder fijarla abajo de la pantalla.
+       Los botones de valores y palos los crea selector.js. -->
+  <div id="hoja" class="hoja" aria-hidden="true">
+    <div class="hoja-cabecera">
+      <span id="hoja-titulo" class="hoja-titulo"></span>
+      <button id="btn-quitar" type="button" class="boton boton-pequeno">Quitar</button>
+      <button id="btn-listo" type="button" class="boton boton-pequeno boton-acento">Listo</button>
+    </div>
+    <div id="rejilla-valores" class="rejilla-valores"></div>
+    <div id="fila-palos" class="fila-palos"></div>
+  </div>
 
-    // ---- 2. Registrar el Service Worker (sw.js) ----
-    // Es el archivo que guarda una copia de la app para usarla sin internet.
-    const estadoSw = document.getElementById('estado-sw');
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js')
-        .then(() => navigator.serviceWorker.ready)
-        .then(() => { estadoSw.textContent = 'listo ✅'; })
-        .catch((error) => {
-          estadoSw.textContent = 'error ❌';
-          console.error('No se pudo registrar el Service Worker:', error);
-        });
-    } else {
-      estadoSw.textContent = 'no disponible en este navegador';
-    }
-  </script>
+  <!-- type="module": permite usar import/export entre archivos .js -->
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

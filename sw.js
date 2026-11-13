@@ -8,15 +8,19 @@
 // IMPORTANTE: cada vez que cambies cualquier archivo de la app, sube el número de VERSION.
 // Así el iPhone sabe que hay una versión nueva y la descarga.
 
-const VERSION = 'v0.0.2';
+const VERSION = 'v0.1.1';
 const CACHE = 'poker-estudio-' + VERSION;
 
-// Lista de archivos que se guardan para usar sin conexión
+// Lista de archivos que se guardan para usar sin conexión.
+// ¡Cada archivo .js nuevo tiene que estar aquí! Si no, la app falla en modo avión.
 const ARCHIVOS = [
   './',
   './index.html',
   './manifest.json',
   './css/estilos.css',
+  './js/app.js',
+  './js/cartas.js',
+  './js/selector.js',
   './icons/icon-180.png',
   './icons/icon-192.png',   // también se usa como favicon
   './icons/icon-512.png',
@@ -26,7 +30,9 @@ const ARCHIVOS = [
 self.addEventListener('install', (evento) => {
   evento.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(ARCHIVOS))
+      // cache: 'reload' = descargar de internet sí o sí, sin usar la caché normal del navegador
+      // (GitHub Pages la guarda 10 minutos y podríamos meter archivos viejos en la versión nueva)
+      .then((cache) => cache.addAll(ARCHIVOS.map((url) => new Request(url, { cache: 'reload' }))))
       .then(() => self.skipWaiting())  // activar la versión nueva sin esperar
   );
 });

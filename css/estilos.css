@@ -1,40 +1,231 @@
-/* estilos.css: aspecto visual de la app (diseño oscuro pensado para móvil) */
+/* estilos.css: aspecto visual de la app (diseño oscuro pensado para móvil y pulgar) */
 
 /* Variables de color: si quieres cambiar un color, cámbialo solo aquí */
 :root {
   --fondo: #0f1115;
   --tarjeta: #1a1d24;
+  --boton: #2a2f3a;
+  --boton-pulsado: #3a4150;
+  --borde: #3a4150;
   --texto: #e8eaed;
   --texto-suave: #9aa0a6;
   --acento: #2ecc71;   /* verde "tapete" */
+  --malo: #ff5c5c;
+
+  /* Baraja de 4 colores: cada palo tiene su color (además del símbolo) */
+  --picas: #e8eaed;
+  --corazones: #ff5c5c;
+  --diamantes: #4da3ff;
+  --treboles: #3ddc84;
 }
 
 /* Que el ancho de las cajas incluya el relleno y el borde (más fácil de calcular) */
 * { box-sizing: border-box; }
+
+/* El atributo "hidden" siempre oculta, aunque otra regla diga display: flex */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
   background: var(--fondo);
   color: var(--texto);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  /* Evita que el iPhone agrande el texto solo al girar la pantalla */
-  -webkit-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;   /* que el iPhone no agrande el texto al girar */
+  -webkit-tap-highlight-color: transparent; /* sin el recuadro gris al tocar */
 }
 
 .contenedor {
   max-width: 480px;
   margin: 0 auto;
   /* env(safe-area-inset-…) = márgenes de la muesca y la barra inferior del iPhone */
-  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  padding: calc(8px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
 }
 
-h1 { color: var(--acento); margin-top: 8px; }
+/* Con la hoja abierta, dejamos sitio abajo para poder desplazar la página por encima de ella */
+body.hoja-abierta .contenedor { padding-bottom: 380px; }
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+h1 { color: var(--acento); font-size: 1.4rem; margin: 8px 0; }
+h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-suave);
+  margin: 12px 0 8px;
+}
+.estado-red { font-size: 0.85rem; color: var(--texto-suave); }
 
 .tarjeta {
   background: var(--tarjeta);
   border-radius: 12px;
-  padding: 4px 16px;
-  margin: 16px 0;
+  padding: 4px 16px 12px;
+  margin: 12px 0;
 }
 
-.version { color: var(--texto-suave); font-size: 0.85rem; }
+.texto-suave { color: var(--texto-suave); }
+.texto-pequeno { font-size: 0.8rem; }
+.version { color: var(--texto-suave); font-size: 0.85rem; text-align: center; }
+
+/* ===== Botones (mínimo 44 px de alto, cómodos para el dedo) ===== */
+.boton {
+  min-height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--boton);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1rem;
+  touch-action: manipulation; /* sin retraso ni zoom por doble toque */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+.boton:active:not(:disabled) { background: var(--boton-pulsado); transform: scale(0.96); }
+.boton:disabled { opacity: 0.25; cursor: default; }
+.boton-pequeno { min-height: 36px; font-size: 0.95rem; }
+.boton-acento { background: var(--acento); color: #0b1a10; font-weight: 600; }
+.boton-acento:active:not(:disabled) { background: #27b562; }
+.boton-ancho { width: 100%; min-height: 52px; font-weight: 600; }
+.boton-redondo { width: 48px; height: 48px; padding: 0; border-radius: 50%; font-size: 1.5rem; }
+
+/* ===== Resultado ===== */
+.resultado { min-height: 120px; }
+.equidad { font-size: 2.2rem; font-weight: 700; margin: 8px 0 0; }
+.equidad small { font-size: 1rem; font-weight: 400; color: var(--texto-suave); }
+.barra { height: 6px; background: var(--boton); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.barra-relleno { height: 100%; width: 0; background: var(--acento); transition: width 0.2s; }
+
+/* ===== Huecos de cartas ===== */
+.huecos {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 5 columnas iguales: flop, flop, flop, turn, river */
+  gap: 8px;
+}
+.hueco {
+  aspect-ratio: 5 / 7;   /* proporción de una carta de verdad */
+  border-radius: 8px;
+  border: 2px solid var(--borde);
+  background: #232833;
+  color: var(--texto);
+  font: inherit;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+.hueco.vacio { border-style: dashed; background: transparent; }
+.hueco.vacio::after { content: "+"; font-size: 1.6rem; color: var(--texto-suave); }
+.hueco:disabled { opacity: 0.3; cursor: default; }
+.hueco.seleccionado { border: 3px solid var(--acento); box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.25); }
+.hueco:active:not(:disabled) { transform: scale(0.95); }
+.carta-valor { font-size: 1.5rem; font-weight: 700; }
+.carta-palo { font-size: 1.4rem; margin-top: 2px; }
+
+.etiquetas { margin-top: 4px; font-size: 0.75rem; color: var(--texto-suave); text-align: center; }
+.etiqueta-flop { grid-column: span 3; }
+
+/* Colores de los palos (huecos y botones de la hoja) */
+.palo-0 { color: var(--picas); }
+.palo-1 { color: var(--corazones); }
+.palo-2 { color: var(--diamantes); }
+.palo-3 { color: var(--treboles); }
+
+/* ===== Controles ===== */
+.fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+.contador { display: flex; align-items: center; gap: 16px; }
+.contador strong { font-size: 1.4rem; min-width: 1.5em; text-align: center; }
+
+.campos label { flex: 1; display: flex; flex-direction: column; gap: 4px; color: var(--texto-suave); font-size: 0.85rem; }
+.campos input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1.1rem;  /* 16 px o más: si no, el iPhone hace zoom al escribir */
+}
+.pot-odds { margin: 12px 0 0; font-weight: 600; }
+
+/* ===== Hoja inferior para elegir cartas ===== */
+.hoja {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--tarjeta);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  /* Cerrada: escondida por debajo de la pantalla */
+  transform: translateY(105%);
+  visibility: hidden;
+  transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  z-index: 10;
+}
+.hoja.abierta {
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform 0.2s ease;
+}
+
+.hoja-cabecera { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.hoja-titulo { flex: 1; font-weight: 600; }
+
+.rejilla-valores {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+/* La última fila (4 3 2) va centrada: el "4" empieza en la segunda columna */
+.rejilla-valores .tecla:nth-child(11) { grid-column-start: 2; }
+
+.tecla { min-height: 56px; padding: 0; font-size: 1.4rem; font-weight: 600; }
+.tecla.elegido { background: var(--acento); color: #0b1a10; }
+
+.fila-palos {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.tecla-palo { min-height: 68px; font-size: 2.2rem; }
+.tecla-palo.elegido { background: var(--boton); box-shadow: inset 0 0 0 3px currentColor; color: inherit; }
+.tecla-palo.elegido.palo-0 { color: var(--picas); }
+.tecla-palo.elegido.palo-1 { color: var(--corazones); }
+.tecla-palo.elegido.palo-2 { color: var(--diamantes); }
+.tecla-palo.elegido.palo-3 { color: var(--treboles); }
+
+/* ===== Aviso de versión nueva ===== */
+.aviso-version {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+  background: #1f4d33;
+}
