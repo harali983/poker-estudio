@@ -56,14 +56,19 @@ document.getElementById('btn-nueva-mano').addEventListener('click', () => {
   selector.vaciar();
   document.getElementById('bote').value = '';
   document.getElementById('pagar').value = '';
+  actualizarPotOdds();
 });
 
 // ---- 6. Cálculo de la equidad (en un Web Worker) ----
-let worker = null;       // el worker que está calculando ahora (si hay)
-let temporizador = null; // espera corta antes de empezar
+let worker = null;         // el worker que está calculando ahora (si hay)
+let temporizador = null;   // espera corta antes de empezar
+let ultimaEquidad = null;  // última equidad calculada (null = todavía no hay); la usan las pot odds
 
 // Esperamos 150 ms antes de calcular: si tocas varias cosas seguidas, solo se calcula una vez
 function recalcular() {
+  // La equidad anterior deja de valer en cuanto cambia algo (no esperamos a recalcular)
+  ultimaEquidad = null;
+  actualizarPotOdds();
   clearTimeout(temporizador);
   temporizador = setTimeout(lanzarCalculo, 150);
 }
@@ -74,7 +79,6 @@ function lanzarCalculo() {
     worker.terminate();
     worker = null;
   }
-
   const { mias, mesa } = selector.cartas();
   if (mias.length < 2) {
     document.getElementById('resultado-vacio').hidden = false;
@@ -105,6 +109,53 @@ function mostrarResultado(r) {
   document.getElementById('barra-progreso').style.width = Math.round(r.progreso * 100) + '%';
   document.getElementById('manos-simuladas').textContent =
     r.manos.toLocaleString('es-ES') + ' manos simuladas' + (r.terminado ? '' : '…');
+  ultimaEquidad = r.equidad;
+  actualizarPotOdds();
+}
+
+// ---- 7. Pot odds: ¿compensa pagar? ----
+// Pot odds = a pagar / (bote + a pagar): la parte del bote final que pones tú.
+// Es la equidad MÍNIMA que necesitas para que pagar sea rentable a la larga.
+// Ejemplo: bote 100, pagar 50 → 50 / 150 = 33,3 %.
+const campoBote = document.getElementById('bote');
+const campoPagar = document.getElementById('pagar');
+const textoPotOdds = document.getElementById('pot-odds');
+campoBote.addEventListener('input', actualizarPotOdds);
+campoPagar.addEventListener('input', actualizarPotOdds);
+
+// Lee un número escrito con coma o con punto ("12,5" o "12.5"). Devuelve null si no es válido.
+function leerNumero(campo) {
+  const texto = campo.value.trim().replace(',', '.');
+  if (texto === '') return null;
+  const numero = Number(texto);
+  return Number.isFinite(numero) && numero >= 0 ? numero : null;
+}
+
+function actualizarPotOdds() {
+  const bote = leerNumero(campoBote);
+  const pagar = leerNumero(campoPagar);
+
+  // Sin bote o sin nada que pagar, no hay pot odds que mostrar
+  if (bote === null || pagar === null || pagar === 0) {
+    textoPotOdds.hidden = true;
+    return;
+  }
+
+  const necesaria = pagar / (bote + pagar);
+  textoPotOdds.hidden = false;
+  textoPotOdds.classList.remove('rentable', 'no-rentable');
+
+  if (ultimaEquidad === null) {
+    textoPotOdds.textContent = `Pot odds ${porcentaje(necesaria)}: necesitas al menos esa equidad para pagar.`;
+  } else if (ultimaEquidad > necesaria) {
+    textoPotOdds.classList.add('rentable');
+    textoPotOdds.textContent =
+      `✅ Pagar es rentable: tu equidad (${porcentaje(ultimaEquidad)}) supera el ${porcentaje(necesaria)} necesario.`;
+  } else {
+    textoPotOdds.classList.add('no-rentable');
+    textoPotOdds.textContent =
+      `❌ Pagar no es rentable: necesitas ${porcentaje(necesaria)} y tu equidad es ${porcentaje(ultimaEquidad)}.`;
+  }
 }
 
 // 0.634 → "63,4 %" (con coma decimal, como se escribe en español)

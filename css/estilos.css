@@ -168,7 +168,10 @@ h2 {
   font: inherit;
   font-size: 1.1rem;  /* 16 px o más: si no, el iPhone hace zoom al escribir */
 }
-.pot-odds { margin: 12px 0 0; font-weight: 600; }
+.pot-odds { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; font-weight: 600; background: var(--boton); }
+.pot-odds.rentable { color: var(--acento); background: rgba(46, 204, 113, 0.12); }
+.pot-odds.no-rentable { color: var(--malo); background: rgba(255, 92, 92, 0.12); }
+.ayuda { margin: 6px 0 0; }
 
 /* ===== Hoja inferior para elegir cartas ===== */
 .hoja {

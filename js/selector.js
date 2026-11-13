@@ -61,6 +61,13 @@ export function crearSelector({ alCambiar }) {
   btnQuitar.addEventListener('click', () => {
     if (seleccionado === null) return;
     huecos[seleccionado] = null;
+    // Las calles van en orden: sin flop completo no hay turn, y sin turn no hay river
+    if (seleccionado >= 2 && seleccionado <= 4) {
+      huecos[5] = null; // quitar una carta del flop quita también turn…
+      huecos[6] = null; // …y river
+    } else if (seleccionado === 5) {
+      huecos[6] = null; // quitar el turn quita también el river
+    }
     valorElegido = paloElegido = null;
     avisarCambio();
     pintar();
