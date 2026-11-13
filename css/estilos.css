@@ -426,8 +426,15 @@ h2 {
   text-align: center;
   pointer-events: none;
 }
-.centro-mesa span { font-size: 0.75rem; color: #cfe9da; text-transform: uppercase; letter-spacing: 0.06em; }
+.centro-mesa > span { font-size: 0.75rem; color: #cfe9da; text-transform: uppercase; letter-spacing: 0.06em; }
 .centro-mesa strong { font-size: 1.25rem; }
+.tu-jugada { margin: 8px 0 0; min-height: 1.3em; font-size: 0.95rem; }
+.tu-jugada .proyecto { display: block; color: #f5c451; font-size: 0.9rem; }
+/* En la mano, en la barra de abajo, debajo de las cartas (en el tapete la tapaban las apuestas) */
+.tu-jugada-barra { margin: 0; min-height: 0; text-align: center; font-size: 0.85rem; line-height: 1.3; }
+.tu-jugada-barra:empty { display: none; }
+.tu-jugada-barra .proyecto { display: inline; font-size: inherit; }
+.tu-jugada-barra .proyecto::before { content: " · "; color: var(--texto-suave); }
 .asiento-mano { cursor: default; }
 .asiento-mano:active { transform: translate(-50%, -50%); }
 /* A quién le toca: borde y halo amarillos, bien visibles */

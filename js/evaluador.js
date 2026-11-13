@@ -92,7 +92,7 @@ export function evaluar(cartas) {
 
 // Valor más alto de una escalera dentro de la máscara, o -1 si no hay.
 // 0x1F = 5 bits seguidos encendidos (cinco valores consecutivos).
-function escaleraMasAlta(mascara) {
+export function escaleraMasAlta(mascara) {
   for (let alta = 12; alta >= 4; alta--) {
     const cinco = 0x1F << (alta - 4);
     if ((mascara & cinco) === cinco) return alta;

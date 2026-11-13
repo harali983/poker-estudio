@@ -34,6 +34,8 @@
   <ul id="lista-motor"></ul>
   <h2>Fin de la mano y participaciones</h2>
   <ul id="lista-final"></ul>
+  <h2>Qué mano tengo (describir.js)</h2>
+  <ul id="lista-describir"></ul>
   <h2>Cantidades y teclado</h2>
   <ul id="lista-teclado"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
@@ -59,6 +61,7 @@
     } from '../js/motor.js';
     import { cerrarMano } from '../js/manos.js';
     import { calcularFinal, repartir, netos, unidadDeFichas, avisoBotes } from '../js/final.js';
+    import { describirMano, textoMano } from '../js/describir.js';
     import {
       teclear, formatearTecleado, leerTecleado, numeroATecleado, pasoDeCiegas, tamanoRapido, maximoAllin,
       revisarCantidad, accionDeCantidad, tamanosRapidos,
@@ -644,6 +647,93 @@
         okF(cerrarMano({ ...m3, cierre: { ganadores: [0] } }, partidaDe(3, 0), s3).mano.cierre === undefined
           && cerrarMano({ ...m3, cierre: { ganadores: [0] } }, partidaDe(3, 0), s3).mano.final.ganadores[0].asiento === 0,
           'Lo elegido en el showdown se guarda en la mano mientras tanto (cierre) y al cerrar pasa al final');
+      }
+
+      // ---- Qué mano tengo (describir.js) — paso 10 ----
+      {
+        const okD = (bien, texto, detalle = '') => anotar('lista-describir', bien, texto, detalle);
+        const desc = (mias, mesa = '') => describirMano(textoACartas(mias), mesa ? textoACartas(mesa) : []);
+        const t = (mias, mesa) => desc(mias, mesa).texto;
+        const casos = [
+          // Antes del flop
+          ['As Ks', '', 'A y K del mismo palo'],
+          ['8c 8d', '', 'Pareja de 8 en mano'],
+          ['7c Ah', '', 'A y 7 de distinto palo'],
+          ['Th 9h', 'Kc', '10 y 9 del mismo palo'], // eligiendo el flop: todavía como antes del flop
+          // Parejas
+          ['Ah 3c', 'Jd Js 7c', 'Pareja de J (de la mesa) con A'],
+          ['Kh Qd', 'Kc 7s 2d', 'Pareja de K (la más alta de la mesa) con Q'],
+          ['Qh Qd', 'Jc 7s 2d', 'Pareja de Q en mano (por encima de la mesa)'],
+          ['5h 5d', 'Jc 7s 2d', 'Pareja de 5 en mano'],
+          ['7h 3d', 'Kc 7s 2d', 'Pareja de 7'],
+          ['Ah 7d', 'Kc 7s 2d', 'Pareja de 7 con A'],
+          // Doble pareja, trío, póker
+          ['Kh 3d', 'Kc 7s 7d', 'Doble pareja, K y 7 (la de 7 es de la mesa)'],
+          ['Kh 7h', 'Kc 7s 2d', 'Doble pareja, K y 7'],
+          ['Ah 3d', 'Kc Ks 7d 7c', 'Doble pareja, K y 7 (las dos de la mesa) con A'],
+          ['7h 7d', '7c Ks 2d', 'Trío de 7 (set: pareja en mano)'],
+          ['Ah 7d', '7c 7s 2d', 'Trío de 7 con A'],
+          ['Ah 3d', '7c 7s 7d', 'Trío de 7 (de la mesa) con A'],
+          // Escaleras, color, full
+          ['Ah 2d', '3c 4s 5d', 'Escalera al 5'],
+          ['9h 8d', 'Tc Js Qd', 'Escalera al Q'],
+          ['Ah 9h', 'Kh 7h 2h', 'Color al A'],
+          ['Kh Kd', 'Kc 7s 7d', 'Full de K con 7'],
+          ['5s 6s', '7s 8s 9s', 'Escalera de color al 9'],
+          ['As Ks', 'Qs Js Ts', 'Escalera de color real'],
+          // Juegas la mesa
+          ['2h 3d', 'As Ks Qs Js Ts', 'Escalera de color real (todo de la mesa)'],
+          ['2h 3d', 'Ac Kd Qs Jh 9c', 'Carta alta, A (todo de la mesa)'],
+          ['2h 3d', 'Ac Ad Ks Kh Qc', 'Doble pareja, A y K (todo de la mesa)'],
+        ];
+        for (const [mias, mesa, esperado] of casos) {
+          const r = t(mias, mesa);
+          okD(r === esperado, `${mias} | ${mesa || '(sin mesa)'} → "${esperado}"`, r === esperado ? '' : 'sale: ' + r);
+        }
+        const pokerMesa = t('9h 2d', '9c 9s 9d');
+        okD(pokerMesa === 'Póker de 9', 'Póker con un 9 tuyo: "Póker de 9" (sin "de la mesa")', pokerMesa);
+        const pokerTodo = t('Ah 2d', '9c 9s 9d 9h');
+        okD(pokerTodo === 'Póker de 9 (de la mesa) con A', 'Póker entero en la mesa, con tu A: "Póker de 9 (de la mesa) con A"', pokerTodo);
+        okD(describirMano(textoACartas('Ah'), []) === null && describirMano([], textoACartas('Kc 7s 2d')) === null,
+          'Sin tus 2 cartas no se describe nada');
+
+        // Proyectos y outs
+        const pc = desc('Ah 9h', 'Kh 7h 2c');
+        okD(pc.texto === 'Carta alta, A' && pc.proyectos.map((p) => p.tipo).join() === 'color' && pc.outs === 9
+          && Math.round(pc.probabilidad * 100) === 35 && pc.textoProyectos === 'Proyecto de color (9 outs: 35 % hasta el river)',
+          'Proyecto de color en el flop: 9 outs, 35 % hasta el river', textoMano(pc));
+        const pcTurn = desc('Ah 9h', 'Kh 7h 2c 3d');
+        okD(pcTurn.outs === 9 && pcTurn.textoProyectos === 'Proyecto de color (9 outs: 20 % en el river)',
+          'Proyecto de color en el turn: 9 de 46 → 20 % en el river', pcTurn.textoProyectos);
+        const ea = desc('9h 8d', '7c 6s 2d');
+        okD(ea.proyectos.map((p) => p.tipo).join() === 'escalera-abierta' && ea.outs === 8 && Math.round(ea.probabilidad * 100) === 31,
+          'Escalera abierta (9-8-7-6): 8 outs, 31 % hasta el river', textoMano(ea));
+        const ei = desc('9h 8d', '6c 5s Kd');
+        okD(ei.proyectos.map((p) => p.tipo).join() === 'escalera-interna' && ei.outs === 4,
+          'Escalera interna (falta el 7): 4 outs', textoMano(ei));
+        const edi = desc('9h 7d', '5c 8s Jd');
+        okD(edi.proyectos.map((p) => p.tipo).join() === 'escalera-doble-interna' && edi.outs === 8,
+          'Doble escalera interna (5 _ 7-8-9 _ J: el 6 o el 10): 8 outs', textoMano(edi));
+        const combo = desc('9h 8h', '7h 6c 2h');
+        okD(combo.proyectos.map((p) => p.tipo).join() === 'color,escalera-abierta' && combo.outs === 15
+          && Math.round(combo.probabilidad * 100) === 54,
+          'Color + escalera abierta: 9 + 8 − 2 = 15 outs (sin contar dos veces el 5♥ y el 10♥), 54 %', textoMano(combo));
+        const rueda = desc('2h 3d', '4c 5s Kd');
+        okD(rueda.proyectos[0].tipo === 'escalera-abierta' && rueda.outs === 8, '2-3-4-5: abierta por el A y por el 6 (8 outs)', textoMano(rueda));
+        const ruedaInterna = desc('Ah 2d', '3c 4s Kd');
+        okD(ruedaInterna.proyectos[0].tipo === 'escalera-interna' && ruedaInterna.outs === 4, 'A-2-3-4: solo el 5 (interna, 4 outs)', textoMano(ruedaInterna));
+        const una = desc('Ah 3c', 'Kh 7h 2h');
+        okD(una.proyectos[0].texto === 'Proyecto de color (con una sola carta tuya)' && una.outs === 9,
+          'Color con una sola carta tuya (3 en la mesa): se avisa', textoMano(una));
+        okD(desc('Ac Kd', '9h 8h 7c 6s').proyectos.length === 0,
+          'Un proyecto que está entero en la mesa (9-8-7-6) no cuenta: lo tienen todos');
+        okD(desc('Ah 9h', 'Kh 7h 2h').proyectos.length === 0 && desc('Ah 9h', 'Kh 7h 2c 3d 5s').proyectos.length === 0,
+          'Sin proyectos si ya tienes color o en el river');
+        const escYColor = desc('9h 8h', '7h 6c 5h');
+        okD(escYColor.categoria === 4 && escYColor.proyectos.map((p) => p.tipo).join() === 'color' && escYColor.outs === 9,
+          'Con escalera hecha, el proyecto de color sigue contando (mejora a color)', textoMano(escYColor));
+        okD(textoMano(desc('Kh Qd', 'Kc 7s 2d')) === 'Pareja de K (la más alta de la mesa) con Q' && textoMano(null) === '',
+          'Texto para la pantalla: la mano y, si hay, los proyectos');
       }
 
       // ---- Cantidades y teclado (teclado.js) ----

@@ -25,6 +25,8 @@ import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
 import { manoEnCurso, empezarMano, guardarMano, terminarMano } from './manos.js';
 import { calcularFinal, avisoBotes } from './final.js';
+import { describirMano } from './describir.js';
+import { pintarJugada } from './pantalla-calculadora.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad } from './teclado.js';
 import { ErrorBD } from './db.js';
 import { mostrarError } from './avisos.js';
@@ -361,6 +363,7 @@ export function iniciarMano() {
 
     $('mano-calle').textContent = 'Entre manos';
     $('mano-bote').textContent = '';
+    $('mano-tu-jugada').textContent = '';
     $('mano-estado').textContent = pos
       ? 'Antes de empezar puedes cambiar la mesa (quién juega, fichas…).'
       : 'Tienen que jugar al menos 2 jugadores: cambia la mesa.';
@@ -404,6 +407,7 @@ export function iniciarMano() {
 
     $('mano-calle').textContent = NOMBRE_CALLE[estado.calle];
     $('mano-bote').textContent = 'Bote ' + formatear(estado.bote);
+    pintarTuJugada(estado);
 
     // Qué pasa ahora
     let texto = '';
@@ -452,6 +456,20 @@ export function iniciarMano() {
     $('btn-deshacer').hidden = false;
     $('btn-deshacer').disabled = !puedeDeshacer(mano.eventos);
     pintarCartas();
+  }
+
+  // Qué mano tienes, debajo de la fila de cartas (si estás en la mano, vivo y con tus 2 cartas).
+  // Si alguna calle se anotó sin cartas, se describe lo que se sabe, sin proyectos ni outs.
+  function pintarTuJugada(estado) {
+    const el = $('mano-tu-jugada');
+    const yo = estado.jugadores.find((j) => esYo(j.asiento));
+    if (!yo || !yo.vivo || (mano.misCartas || []).length !== 2) { el.textContent = ''; return; }
+    const completa = estado.mesa.length === { preflop: 0, flop: 3, turn: 4, river: 5 }[estado.calle];
+    const desc = describirMano(mano.misCartas, estado.mesa);
+    if (!completa && desc) {
+      Object.assign(desc, { textoProyectos: 'Faltan cartas de la mesa por anotar' });
+    }
+    pintarJugada(el, desc);
   }
 
   // Fila de cartas: Mesa [flop][flop][flop] [turn] [river] · Tú [][]

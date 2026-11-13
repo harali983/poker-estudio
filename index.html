@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.13</p>
+    <p class="version">Versión 0.2.14</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -205,6 +205,8 @@
           <span id="etiqueta-mias" class="etiqueta-cartas">Tú</span>
           <div id="cartas-mias" class="cartas-mini"></div>
         </div>
+        <!-- Qué mano tienes (describir.js): "Pareja de J (de la mesa) con A · Proyecto de color (9 outs…)" -->
+        <p id="mano-tu-jugada" class="tu-jugada tu-jugada-barra"></p>
         <!-- Showdown: quién gana (uno o varios) y las cartas que mostró cada uno (las pinta pantalla-mano.js) -->
         <div id="showdown" class="showdown" hidden></div>
         <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
@@ -339,6 +341,7 @@
     <section class="tarjeta">
       <h2>Tu mano</h2>
       <div class="huecos" id="huecos-mano"></div>
+      <p id="calc-tu-jugada" class="tu-jugada" aria-live="polite"></p>
 
       <h2>Mesa</h2>
       <div class="huecos" id="huecos-mesa"></div>

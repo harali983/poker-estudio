@@ -5,6 +5,7 @@
 
 import { crearSelector } from './selector.js';
 import { interpretarNumero } from './numeros.js';
+import { describirMano } from './describir.js';
 
 export function iniciarCalculadora() {
   // ---- 1. Selector de cartas ----
@@ -46,6 +47,7 @@ export function iniciarCalculadora() {
 
   // Esperamos 150 ms antes de calcular: si tocas varias cosas seguidas, solo se calcula una vez
   function recalcular() {
+    mostrarJugada();
     // La equidad anterior deja de valer en cuanto cambia algo (no esperamos a recalcular)
     ultimaEquidad = null;
     actualizarPotOdds();
@@ -79,6 +81,12 @@ export function iniciarCalculadora() {
     document.getElementById('resultado-datos').hidden = false;
     document.getElementById('barra-progreso').style.width = '0%';
     document.getElementById('manos-simuladas').textContent = 'Calculando…';
+  }
+
+  // Qué mano tienes ("Pareja de J (de la mesa) con A") y los proyectos con sus outs
+  function mostrarJugada() {
+    const { mias, mesa } = selector.cartas();
+    pintarJugada(document.getElementById('calc-tu-jugada'), describirMano(mias, mesa));
   }
 
   function mostrarResultado(r) {
@@ -137,6 +145,17 @@ export function iniciarCalculadora() {
       selector.cerrar(); // que la hoja de cartas no se quede abierta encima de otra pantalla
     },
   };
+}
+
+/** Pinta la descripción de tu mano: la mano hecha y, debajo, los proyectos (si hay). */
+export function pintarJugada(elemento, desc) {
+  elemento.textContent = desc ? desc.texto : '';
+  if (desc && desc.textoProyectos) {
+    const p = document.createElement('span');
+    p.className = 'proyecto';
+    p.textContent = desc.textoProyectos;
+    elemento.appendChild(p);
+  }
 }
 
 // 0.634 → "63,4 %" (con coma decimal, como se escribe en español)
