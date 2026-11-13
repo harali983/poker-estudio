@@ -30,6 +30,8 @@
   <ul id="lista-mesa"></ul>
   <h2>Posiciones y botón</h2>
   <ul id="lista-posiciones"></ul>
+  <h2>Motor de la mano</h2>
+  <ul id="lista-motor"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
   <h2>Base de datos (IndexedDB, en una base de datos de prueba aparte)</h2>
@@ -47,6 +49,7 @@
       validarMesa, resolverJugadores, crearPartida, borradorDePartida, cambiarJuega,
     } from '../js/mesa.js';
     import { POSICIONES, calcularPosiciones, siguienteBoton } from '../js/posiciones.js';
+    import { CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer } from '../js/motor.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -302,6 +305,141 @@
       ok(cambiarJuega(borr, 1, false).boton === 3, 'Si deja de jugar otro, el botón no se mueve');
       const unoSolo = [1, 2, 3, 4, 5].reduce((acc, i) => cambiarJuega(acc, i, false), borr);
       ok(validarMesa(unoSolo).errores.includes('Tienen que jugar al menos 2 jugadores.'), 'Si solo juega 1: error al validar la mesa');
+    }
+
+    // ---- Motor de la mano (motor.js) ----
+    {
+      const ok = (bien, texto, detalle = '') => anotar('lista-motor', bien, texto, detalle);
+      // Partida de prueba: n asientos, ciegas 1/2. fichas: null (sin contar), un número o una lista por asiento
+      const partidaDe = (n, boton, { fichas = null, ante = 0, fuera = [] } = {}) => ({
+        id: 'p', boton, ciegas: { sb: 1, bb: 2, ante }, conFichas: fichas !== null,
+        asientos: Array.from({ length: n }, (_, i) => ({
+          asiento: i, jugadorId: i === 0 ? 'yo' : 'j' + i,
+          fichas: Array.isArray(fichas) ? fichas[i] : fichas, juega: !fuera.includes(i),
+        })),
+      });
+      const nueva = (n, boton, opc) => crearMano(partidaDe(n, boton, opc), { id: 'm', numero: 1, fecha: '2026-11-13' });
+      // Pasos: "3 call", "0 subida 6", "flop"… (los asientos van numerados desde 0)
+      const CARTAS = { flop: [0, 1, 2], turn: [3], river: [4] };
+      function jugar(mano, pasos) {
+        const eventos = [...mano.eventos];
+        for (const paso of pasos) {
+          const [a, b, c] = paso.split(' ');
+          if (CALLES.includes(a)) { eventos.push({ tipo: 'mesa', calle: a, cartas: CARTAS[a] }); continue; }
+          const calle = calcularEstado(mano, eventos).calle;
+          eventos.push({ tipo: 'accion', calle, asiento: Number(a), accion: b, ...(c ? { hasta: Number(c) } : {}) });
+        }
+        return { ...mano, eventos };
+      }
+      const est = (mano, pasos = []) => calcularEstado(jugar(mano, pasos));
+      const resumen = (s) => `${s.calle} · ${s.fase}` + (s.turno !== null ? ` · turno ${s.turno}` : '')
+        + (s.faltan ? ` · falta ${s.faltan}` : '') + ` · bote ${s.bote} · a pagar ${s.aPagar}`
+        + (s.avisos.length ? ' · avisos: ' + s.avisos.map((a) => a.texto).join(' / ') : '');
+
+      // Mano nueva
+      const m6 = nueva(6, 0);
+      const s0 = est(m6);
+      ok(m6.eventos.map((e) => e.tipo + e.asiento + ':' + e.hasta).join(' ') === 'ciega1:1 ciega2:2',
+        'Mano nueva: la SB y la BB se ponen solas', m6.eventos.map((e) => e.tipo + ' ' + e.asiento).join(', '));
+      ok(s0.fase === 'accion' && s0.turno === 3 && s0.bote === 3 && s0.aPagar === 2 && s0.subidaMinima === 4,
+        'Antes del flop empieza el UTG (izquierda de la BB): paga 2 o sube a 4 como mínimo', resumen(s0));
+      ok(m6.jugadores.map((j) => j.posicion).join(',') === 'BTN,SB,BB,UTG,MP,CO', 'La mano guarda la foto de las posiciones');
+
+      // Todos pagan: la BB tiene opción
+      const limp = ['3 call', '4 fold', '5 call', '0 call', '1 call'];
+      const sOpcion = est(m6, limp);
+      const oOpcion = opciones(sOpcion);
+      ok(sOpcion.turno === 2 && sOpcion.aPagar === 0 && oOpcion.check && oOpcion.subir && !oOpcion.call && !oOpcion.fold,
+        'Si nadie sube, la BB tiene opción: check o subir', resumen(sOpcion));
+      const sFlop = est(m6, [...limp, '2 check']);
+      ok(sFlop.fase === 'cartas' && sFlop.faltan === 'flop' && sFlop.bote === 10 && sFlop.turno === null,
+        'La BB pasa: se cierra la calle y se pide el flop', resumen(sFlop));
+
+      // Después del flop
+      const sPost = est(m6, [...limp, '2 check', 'flop']);
+      const oPost = opciones(sPost);
+      ok(sPost.calle === 'flop' && sPost.turno === 1 && sPost.apuestaMaxima === 0 && sPost.subidaMinima === 2 && oPost.check && oPost.apostar,
+        'Después del flop empieza la SB (primer vivo a la izquierda del botón): check o apostar, mínimo 2', resumen(sPost));
+      const sSaltaFold = est(m6, [...limp, '2 check', 'flop', '1 check', '2 check', '3 check']);
+      ok(sSaltaFold.turno === 5, 'El que se retiró (asiento 4) no vuelve a hablar: del 3 pasa al 5', resumen(sSaltaFold));
+      const conApuesta = [...limp, '2 check', 'flop', '1 check', '2 apuesta 6', '3 fold', '5 call', '0 subida 18'];
+      const sResube = est(m6, conApuesta);
+      ok(sResube.turno === 1 && sResube.aPagar === 18 && sResube.subidaMinima === 30,
+        'Tras una subida vuelven a hablar todos, empezando por el siguiente (la SB que pasó)', resumen(sResube));
+      const sCierra = est(m6, [...conApuesta, '1 fold', '2 call', '5 fold']);
+      ok(sCierra.fase === 'cartas' && sCierra.faltan === 'turn' && sCierra.bote === 10 + 18 + 18 + 6 && sCierra.vivos.join(',') === '0,2',
+        'Cuando todos han igualado, se cierra el flop y se pide el turn', resumen(sCierra));
+      const sShow = est(m6, [...conApuesta, '1 fold', '2 call', '5 fold', 'turn', '2 check', '0 check', 'river', '2 check', '0 check']);
+      ok(sShow.fase === 'fin' && sShow.motivoFin === 'showdown' && sShow.ganador === null,
+        'Si se cierra el river, la mano va al showdown', resumen(sShow));
+
+      // Todos se retiran
+      const sRetirada = est(m6, ['3 subida 6', '4 fold', '5 fold', '0 fold', '1 fold', '2 fold']);
+      ok(sRetirada.fase === 'fin' && sRetirada.motivoFin === 'retirada' && sRetirada.ganador === 3 && sRetirada.bote === 9,
+        'Si todos se retiran, la mano acaba y gana el que queda (sin pedir cartas)', resumen(sRetirada));
+      const sBBGana = est(m6, ['3 fold', '4 fold', '5 fold', '0 fold', '1 fold']);
+      ok(sBBGana.fase === 'fin' && sBBGana.ganador === 2, 'Todos se retiran ante la BB: gana la BB sin hablar', resumen(sBBGana));
+
+      // Subidas antes del flop
+      const s3bet = est(m6, ['3 subida 6', '4 fold', '5 fold', '0 fold', '1 fold', '2 subida 20']);
+      ok(s3bet.turno === 3 && s3bet.aPagar === 14 && s3bet.subidaMinima === 34,
+        'La BB resube: le vuelve a tocar al que subió; subida mínima = 20 + 14', resumen(s3bet));
+
+      // Mano a mano
+      const hu = nueva(2, 0);
+      const sHu = est(hu);
+      ok(sHu.turno === 0 && sHu.aPagar === 1, 'Mano a mano: el botón (SB) habla primero antes del flop y le falta 1', resumen(sHu));
+      ok(est(hu, ['0 call']).turno === 1 && opciones(est(hu, ['0 call'])).check, 'Mano a mano: si el botón paga, la BB tiene opción');
+      ok(est(hu, ['0 call', '1 check', 'flop']).turno === 1, 'Mano a mano: después del flop habla primero la BB', resumen(est(hu, ['0 call', '1 check', 'flop'])));
+
+      // Asientos que no juegan
+      const mFuera = nueva(6, 0, { fuera: [3] });
+      ok(mFuera.jugadores.length === 5 && est(mFuera).turno === 4, 'Si el asiento 3 no juega, empieza el 4 y la mano tiene 5 jugadores', resumen(est(mFuera)));
+
+      // Antes
+      const mAnte = nueva(3, 0, { ante: 1 });
+      ok(mAnte.eventos.filter((e) => e.tipo === 'ante').length === 3 && est(mAnte).bote === 6 && est(mAnte).aPagar === 2,
+        'Con ante: cada uno pone 1 al bote, pero no cuenta para lo que hay que pagar', resumen(est(mAnte)));
+
+      // Avisos (se anota igualmente)
+      const sMinima = est(m6, ['3 subida 3']);
+      ok(sMinima.avisos.some((a) => a.texto.includes('mínima')) && sMinima.apuestaMaxima === 3,
+        'Subida menor que la mínima: aviso, pero se anota', sMinima.avisos[0]?.texto);
+      const sTurno = est(m6, ['5 call']);
+      ok(sTurno.avisos.some((a) => a.texto.includes('No era su turno')) && sTurno.jugadores.find((j) => j.asiento === 5).puesto === 2,
+        'Acción fuera de turno: aviso, pero se anota', sTurno.avisos[0]?.texto);
+      const sCheckDebe = est(m6, ['3 check']);
+      ok(sCheckDebe.avisos.some((a) => a.texto.includes('por pagar')), 'Check con algo por pagar: aviso', sCheckDebe.avisos[0]?.texto);
+      ok(est(m6, ['3 call', 'flop']).avisos.some((a) => a.texto.includes('no se había cerrado')), 'Poner el flop antes de cerrar la calle: aviso');
+
+      // Fichas y all-in
+      const mFichas = nueva(2, 0, { fichas: [50, 80] });
+      const sAllin = est(mFichas, ['0 allin']);
+      ok(sAllin.turno === 1 && sAllin.aPagar === 48 && sAllin.jugadores[0].fichas === 0 && sAllin.jugadores[0].allin,
+        'All-in de 50: el otro tiene que pagar 48 más', resumen(sAllin));
+      const sAllinCall = est(mFichas, ['0 allin', '1 call']);
+      ok(sAllinCall.fase === 'cartas' && sAllinCall.faltan === 'flop' && sAllinCall.bote === 100 && sAllinCall.jugadores[1].fichas === 30,
+        'Paga el all-in: sin más apuestas posibles, solo faltan las cartas', resumen(sAllinCall));
+      const sSinAccion = est(mFichas, ['0 allin', '1 call', 'flop', 'turn']);
+      ok(sSinAccion.fase === 'cartas' && sSinAccion.faltan === 'river', 'Con todos all-in, cada calle pide la siguiente carta sin pedir acciones', resumen(sSinAccion));
+      ok(est(mFichas, ['0 allin', '1 call', 'flop', 'turn', 'river']).motivoFin === 'showdown', 'Con todos all-in, tras el river va al showdown');
+      const sCorto = est(nueva(3, 0, { fichas: [100, 100, 30] }), ['0 subida 50']);
+      ok(sCorto.turno === 1 && sCorto.jugadores[2].aPagar === 28, 'Lo que hay que pagar no pasa de las fichas que le quedan', `BB debe ${sCorto.jugadores[2].aPagar}`);
+      const mBBCorta = nueva(3, 0, { fichas: [100, 100, 1] });
+      ok(mBBCorta.eventos[1].hasta === 1 && est(mBBCorta).jugadores[2].allin,
+        'Si la BB solo tiene 1 ficha, pone 1 y queda all-in', JSON.stringify(mBBCorta.eventos[1]));
+
+      // Deshacer
+      const conTodo = jugar(m6, [...limp, '2 check', 'flop', '1 check']);
+      const sinUltima = { ...conTodo, eventos: deshacer(conTodo.eventos) };
+      ok(JSON.stringify(calcularEstado(sinUltima)) === JSON.stringify(est(m6, [...limp, '2 check', 'flop'])),
+        'Deshacer una acción deja el estado igual que antes de hacerla');
+      const sinFlop = { ...conTodo, eventos: deshacer(deshacer(conTodo.eventos)) };
+      ok(calcularEstado(sinFlop).fase === 'cartas' && calcularEstado(sinFlop).mesa.length === 0, 'Deshacer el flop vuelve a pedirlo', resumen(calcularEstado(sinFlop)));
+      let eventos = conTodo.eventos;
+      while (puedeDeshacer(eventos)) eventos = deshacer(eventos);
+      ok(eventos.length === 2 && JSON.stringify(calcularEstado({ ...m6, eventos })) === JSON.stringify(s0),
+        'Deshacer varias veces seguidas llega al principio; las ciegas no se deshacen', eventos.length + ' eventos');
     }
 
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----
