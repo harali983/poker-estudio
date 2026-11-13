@@ -72,6 +72,40 @@ export function maximoAllin(estado) {
 export function tamanoRapido(estado, fraccion, paso) {
   const j = delTurno(estado);
   const exacto = j.puesto + estado.aPagar + fraccion * (estado.bote + estado.aPagar);
+  return ajustarTamano(estado, exacto, paso);
+}
+
+/**
+ * Los tamaños rápidos que se ofrecen (además de All-in), según el momento:
+ *  - Antes del flop, si nadie ha subido: 2, 2,5 y 3 BB, más 1 BB por cada jugador que
+ *    solo haya pagado ("limpers"). Ej.: con 1 limper, 3 BB → hasta 4 BB.
+ *  - Antes del flop, si ya hay subida: 3× y 4× la subida (el total al que se subió).
+ *  - Después del flop: ½, ⅔ y el bote.
+ * Devuelve [{ texto, hasta, allin, ajuste }].
+ */
+export function tamanosRapidos(estado, paso, bb) {
+  if (estado.calle === 'preflop') {
+    if (estado.apuestaMaxima <= bb) {
+      const limpers = estado.jugadores
+        .filter((j) => j.asiento !== estado.turno && j.haHablado && j.puesto > 0).length;
+      return [2, 2.5, 3].map((k) => ({
+        texto: formatear(k) + ' BB' + (limpers ? ' +' + limpers : ''),
+        ...ajustarTamano(estado, (k + limpers) * bb, paso),
+      }));
+    }
+    return [3, 4].map((k) => ({
+      texto: k + '× subida',
+      ...ajustarTamano(estado, k * estado.apuestaMaxima, paso),
+    }));
+  }
+  return [[1 / 2, '½ bote'], [2 / 3, '⅔ bote'], [1, 'Bote']].map(([f, texto]) => ({
+    texto,
+    ...tamanoRapido(estado, f, paso),
+  }));
+}
+
+/** Redondea al paso de las ciegas, sube a la mínima si no llega y limita al all-in. */
+function ajustarTamano(estado, exacto, paso) {
   let hasta = redondear(Math.round(exacto / paso) * paso);
   let ajuste = null;
   if (hasta < estado.subidaMinima) {
@@ -131,22 +165,19 @@ function formatear(n) {
 
 // ---------------------------------------------------------------- Pantalla
 
-const TAMANOS = [
-  { id: 'medio', fraccion: 1 / 2, texto: '½ bote' },
-  { id: 'dostercios', fraccion: 2 / 3, texto: '⅔ bote' },
-  { id: 'bote', fraccion: 1, texto: 'Bote' },
-];
+const HUECOS_TAMANO = 3; // botones para tamaños rápidos (tamano-1…3), más All-in
 
 /**
  * Prepara la hoja del teclado (está en index.html, dentro de la pantalla de la mano).
- * abrir({ titulo, estado, paso, alAnotar(hasta, allin) })
+ * abrir({ titulo, estado, paso, bb, alAnotar(hasta, allin) })
  */
 export function crearTeclado() {
   const $ = (id) => document.getElementById(id);
   const hoja = $('hoja-cantidad');
   const btnAnotar = $('cantidad-anotar');
 
-  let abierta = null; // { titulo, estado, paso, alAnotar } mientras está abierta
+  let abierta = null; // { titulo, estado, paso, bb, alAnotar } mientras está abierta
+  let tamanos = [];   // tamaños rápidos de este momento
   let texto = '';
   let allinElegido = false;
 
@@ -155,11 +186,10 @@ export function crearTeclado() {
     tecla.addEventListener('click', () => pulsar(tecla.dataset.tecla));
   }
   // Tamaños rápidos y all-in
-  for (const t of TAMANOS) {
-    $('tamano-' + t.id).addEventListener('click', () => {
-      if (!abierta) return;
-      const r = tamanoRapido(abierta.estado, t.fraccion, abierta.paso);
-      texto = numeroATecleado(r.hasta);
+  for (let i = 0; i < HUECOS_TAMANO; i++) {
+    $('tamano-' + (i + 1)).addEventListener('click', () => {
+      if (!abierta || !tamanos[i]) return;
+      texto = numeroATecleado(tamanos[i].hasta);
       allinElegido = false;
       pintar();
     });
@@ -211,9 +241,14 @@ export function crearTeclado() {
     abierta = opciones;
     texto = '';
     allinElegido = false;
-    for (const t of TAMANOS) {
-      const r = tamanoRapido(opciones.estado, t.fraccion, opciones.paso);
-      $('tamano-' + t.id).querySelector('small').textContent = r.allin ? 'all-in' : formatear(r.hasta);
+    tamanos = tamanosRapidos(opciones.estado, opciones.paso, opciones.bb);
+    for (let i = 0; i < HUECOS_TAMANO; i++) {
+      const boton = $('tamano-' + (i + 1));
+      const t = tamanos[i];
+      boton.hidden = !t;
+      if (!t) continue;
+      boton.querySelector('span').textContent = t.texto;
+      boton.querySelector('small').textContent = t.allin ? 'all-in' : formatear(t.hasta);
     }
     const maximo = maximoAllin(opciones.estado);
     $('tamano-allin').querySelector('small').textContent = maximo === null ? '¿cuánto?' : formatear(maximo);

@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.10</p>
+    <p class="version">Versión 0.2.11</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -229,9 +229,10 @@
       <p id="cantidad-info" class="texto-suave texto-pequeno centrado"></p>
       <p id="cantidad-aviso" class="aviso-campo centrado"></p>
       <div class="tamanos">
-        <button id="tamano-medio" type="button" class="boton tecla-tamano">½ bote<small></small></button>
-        <button id="tamano-dostercios" type="button" class="boton tecla-tamano">⅔ bote<small></small></button>
-        <button id="tamano-bote" type="button" class="boton tecla-tamano">Bote<small></small></button>
+        <!-- Antes del flop: 2 / 2,5 / 3 BB (o 3× y 4× la subida). Después: ½, ⅔ y bote -->
+        <button id="tamano-1" type="button" class="boton tecla-tamano"><span></span><small></small></button>
+        <button id="tamano-2" type="button" class="boton tecla-tamano"><span></span><small></small></button>
+        <button id="tamano-3" type="button" class="boton tecla-tamano"><span></span><small></small></button>
         <button id="tamano-allin" type="button" class="boton tecla-tamano tecla-allin">All-in<small></small></button>
       </div>
       <div class="teclado-cifras">

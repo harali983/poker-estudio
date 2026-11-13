@@ -101,6 +101,7 @@ export function iniciarMano() {
       titulo: `${quien} (${j.posicion}) · ${apuesta ? 'apostar' : 'subir hasta'}…`,
       estado,
       paso: pasoDeCiegas(mano.ciegas),
+      bb: mano.ciegas.bb,
       alAnotar(hasta, allin) {
         if (!mano || mano.eventos.length !== eventosAntes) return; // la mano cambió mientras tanto
         cambiarEventos([...mano.eventos, eventoDeAccion(estado, accionDeCantidad(estado, allin), hasta)]);

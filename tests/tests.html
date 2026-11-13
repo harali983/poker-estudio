@@ -55,7 +55,7 @@
     import { cerrarMano } from '../js/manos.js';
     import {
       teclear, formatearTecleado, leerTecleado, numeroATecleado, pasoDeCiegas, tamanoRapido, maximoAllin,
-      revisarCantidad, accionDeCantidad,
+      revisarCantidad, accionDeCantidad, tamanosRapidos,
     } from '../js/teclado.js';
 
     let correctas = 0;
@@ -541,6 +541,29 @@
           'Sin llevar fichas, "All-in" + cantidad: se anota all-in aunque no supere la apuesta');
         okT(accionDeCantidad(sPost, false) === 'apuesta' && accionDeCantidad(s0, false) === 'subida' && accionDeCantidad(s0, true) === 'allin',
           'Sin apuesta previa es "apuesta"; con apuesta, "subida"; y all-in si lo es');
+
+        // Tamaños que ofrece el teclado según el momento (antes del flop, en ciegas grandes)
+        const ofrece = (s, ciegas = { sb: 1, bb: 2 }) => tamanosRapidos(s, pasoDeCiegas(ciegas), ciegas.bb)
+          .map((x) => `${x.texto}=${x.hasta}${x.allin ? ' all-in' : ''}`).join(' · ');
+        okT(ofrece(s0) === '2 BB=4 · 2,5 BB=5 · 3 BB=6',
+          'Antes del flop, sin subidas ni limpers: 2, 2,5 y 3 BB (4, 5, 6)', ofrece(s0));
+        const s1Limp = est(m6, ['3 call']);
+        okT(ofrece(s1Limp) === '2 BB +1=6 · 2,5 BB +1=7 · 3 BB +1=8',
+          'Con 1 jugador que solo pagó: +1 BB a cada tamaño (6, 7, 8)', ofrece(s1Limp));
+        okT(ofrece(sOpcion) === '2 BB +4=12 · 2,5 BB +4=13 · 3 BB +4=14',
+          'La BB con opción y 4 que pagaron (SB incluida): +4 BB (12, 13, 14)', ofrece(sOpcion));
+        const sAnte6 = est(m6, ['3 subida 6']);
+        okT(ofrece(sAnte6) === '3× subida=18 · 4× subida=24',
+          'Si ya hay subida (hasta 6): 3× y 4× la subida (18, 24); con All-in, 3 botones', ofrece(sAnte6));
+        const s3betAnte = est(m6, ['3 subida 6', '4 subida 18']);
+        okT(ofrece(s3betAnte) === '3× subida=54 · 4× subida=72', 'Ante una resubida a 18: 3× y 4× (54, 72)', ofrece(s3betAnte));
+        okT(ofrece(sPost) === '½ bote=5 · ⅔ bote=7 · Bote=10', 'Después del flop se quedan ½, ⅔ y bote', ofrece(sPost));
+        const sCortoPre = est(nueva(3, 0, { fichas: [11, 100, 100] }));
+        okT(ofrece(sCortoPre) === '2 BB=4 · 2,5 BB=5 · 3 BB=6' && ofrece(est(nueva(3, 0, { fichas: [5, 100, 100] }))) === '2 BB=4 · 2,5 BB=5 all-in · 3 BB=5 all-in',
+          'Con 5 fichas, los tamaños que pasan de 5 se quedan en su all-in', ofrece(est(nueva(3, 0, { fichas: [5, 100, 100] }))));
+        const m05 = crearMano({ ...partidaDe(6, 0), ciegas: { sb: 0.5, bb: 1, ante: 0 } }, { id: 'x', numero: 1, fecha: 'x' });
+        okT(ofrece(calcularEstado(m05), { sb: 0.5, bb: 1 }) === '2 BB=2 · 2,5 BB=2.5 · 3 BB=3',
+          'Ciegas 0,5/1: 2,5 BB = 2,5 (redondeo de 0,5 en 0,5)', ofrece(calcularEstado(m05), { sb: 0.5, bb: 1 }));
 
         // Y el motor con lo que anota el teclado
         const conSubida = jugar(m6, []);
