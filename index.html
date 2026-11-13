@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!-- index.html: la única página de la app. El navegador la lee de arriba abajo. -->
+<html lang="es">
+<head>
+  <!-- Codificación de caracteres: permite acentos, ñ y los palos ♠ ♥ ♦ ♣ -->
+  <meta charset="utf-8">
+
+  <!-- Ajusta la página al ancho del móvil.
+       viewport-fit=cover: usa toda la pantalla, también la zona de la "muesca". -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <title>Póker Estudio</title>
+
+  <!-- Color de la barra superior del sistema -->
+  <meta name="theme-color" content="#0f1115">
+
+  <!-- Icono de la pestaña del navegador (favicon). Sin esto, el navegador
+       busca "favicon.ico" por su cuenta y da un error 404 en la consola. -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+  <!-- Metaetiquetas para la app instalada (pantalla completa).
+       "mobile-web-app-capable" es el nombre estándar actual;
+       "apple-mobile-web-app-capable" está marcado como obsoleto, pero lo
+       mantenemos porque Safari en iPhone todavía lo necesita. -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Póker Estudio">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+
+  <!-- El manifest describe la app instalable (nombre, iconos, colores) -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Nuestra hoja de estilos -->
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <main class="contenedor">
+    <h1>♠ Póker Estudio</h1>
+    <p>¡Hola! Si ves esto en tu iPhone, la Fase 0 funciona.</p>
+
+    <div class="tarjeta">
+      <p>Estado de la conexión: <strong id="estado-red">comprobando…</strong></p>
+      <p>Modo sin conexión: <strong id="estado-sw">comprobando…</strong></p>
+    </div>
+
+    <p class="version">Versión 0.0.2</p>
+  </main>
+
+  <script>
+    // ---- 1. Mostrar si hay internet o no ----
+    const estadoRed = document.getElementById('estado-red');
+    function actualizarRed() {
+      estadoRed.textContent = navigator.onLine ? 'con internet' : 'sin internet ✈️';
+    }
+    actualizarRed();
+    window.addEventListener('online', actualizarRed);   // se avisa al recuperar la red
+    window.addEventListener('offline', actualizarRed);  // y al perderla
+
+    // ---- 2. Registrar el Service Worker (sw.js) ----
+    // Es el archivo que guarda una copia de la app para usarla sin internet.
+    const estadoSw = document.getElementById('estado-sw');
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(() => navigator.serviceWorker.ready)
+        .then(() => { estadoSw.textContent = 'listo ✅'; })
+        .catch((error) => {
+          estadoSw.textContent = 'error ❌';
+          console.error('No se pudo registrar el Service Worker:', error);
+        });
+    } else {
+      estadoSw.textContent = 'no disponible en este navegador';
+    }
+  </script>
+</body>
+</html>

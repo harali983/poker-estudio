@@ -1,0 +1,40 @@
+/* estilos.css: aspecto visual de la app (diseño oscuro pensado para móvil) */
+
+/* Variables de color: si quieres cambiar un color, cámbialo solo aquí */
+:root {
+  --fondo: #0f1115;
+  --tarjeta: #1a1d24;
+  --texto: #e8eaed;
+  --texto-suave: #9aa0a6;
+  --acento: #2ecc71;   /* verde "tapete" */
+}
+
+/* Que el ancho de las cajas incluya el relleno y el borde (más fácil de calcular) */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Evita que el iPhone agrande el texto solo al girar la pantalla */
+  -webkit-text-size-adjust: 100%;
+}
+
+.contenedor {
+  max-width: 480px;
+  margin: 0 auto;
+  /* env(safe-area-inset-…) = márgenes de la muesca y la barra inferior del iPhone */
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+}
+
+h1 { color: var(--acento); margin-top: 8px; }
+
+.tarjeta {
+  background: var(--tarjeta);
+  border-radius: 12px;
+  padding: 4px 16px;
+  margin: 16px 0;
+}
+
+.version { color: var(--texto-suave); font-size: 0.85rem; }
