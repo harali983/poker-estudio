@@ -199,6 +199,7 @@ h2 {
 
 .hoja-cabecera { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .hoja-titulo { flex: 1; font-weight: 600; }
+.hoja-botones { display: flex; gap: 8px; }
 
 .rejilla-valores {
   display: grid;
@@ -467,6 +468,41 @@ h2 {
 .accion-call { background: #1f3a5a; }
 .deshacer { flex-shrink: 0; }
 .accion-subir { background: #5a3d14; color: #ffe0a8; }
+
+/* En la mano, la mesa es menos alta (cuadrada) para dejar sitio a las cartas y las acciones */
+.pantalla-mano .mesa-ovalada { aspect-ratio: 1 / 1; }
+
+/* Fila de cartas de la mano: Mesa [][][] [] []  ·  Tú [][] */
+.fila-cartas { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.etiqueta-cartas { font-size: 0.72rem; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.04em; }
+#etiqueta-mias { margin-left: 6px; }
+.cartas-mini { display: flex; gap: 4px; }
+.carta-mini {
+  width: 34px;
+  aspect-ratio: 5 / 7;
+  padding: 0;
+  border: 2px solid var(--borde);
+  border-radius: 6px;
+  background: #232833;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.carta-mini .carta-valor { font-size: 1rem; }
+.carta-mini .carta-palo { font-size: 0.95rem; margin-top: 1px; }
+.carta-mini.vacia { border-style: dashed; background: transparent; color: var(--texto-suave); }
+.carta-mini.sin-anotar::after { content: "?"; color: var(--texto-suave); }
+.carta-mini:disabled { opacity: 0.25; }
+/* La calle que toca poner: borde verde, para que se vea qué falta */
+.carta-mini.pendiente { border-color: var(--acento); border-style: solid; box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.3); }
+.carta-mini.flop-ultima { margin-right: 4px; } /* separa el flop del turn y el turn del river */
+.carta-mini.turn { margin-right: 4px; }
 
 /* ===== Teclado de cantidades (hoja inferior) ===== */
 .hoja-cantidad { z-index: 20; }

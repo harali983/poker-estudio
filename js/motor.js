@@ -349,6 +349,32 @@ export function eventoDeMesa(estado, cartas = []) {
   return { tipo: 'mesa', calle: estado.faltan, cartas };
 }
 
+/** Cuántas cartas tiene cada calle de la mesa. */
+export function cartasPorCalle(calle) {
+  return CARTAS_POR_CALLE[calle] || 0;
+}
+
+/**
+ * Las cartas de la mesa por calle: { flop: [..] | null, turn: …, river: … }.
+ * null = esa calle todavía no ha llegado; [] = llegó, pero sin anotar las cartas.
+ */
+export function mesaPorCalle(eventos) {
+  const r = { flop: null, turn: null, river: null };
+  for (const ev of eventos) if (ev.tipo === 'mesa' && ev.calle in r) r[ev.calle] = ev.cartas || [];
+  return r;
+}
+
+/** Corrige las cartas de una calle ya anotada (sin tocar el resto de eventos). */
+export function cambiarCartasDeMesa(eventos, calle, cartas) {
+  return eventos.map((ev) => (ev.tipo === 'mesa' && ev.calle === calle ? { ...ev, cartas } : ev));
+}
+
+/** Todas las cartas conocidas de la mano (tuyas y de la mesa): no se pueden repetir. */
+export function cartasConocidas(mano) {
+  const mesa = mesaPorCalle(mano.eventos);
+  return [...(mano.misCartas || []), ...(mesa.flop || []), ...(mesa.turn || []), ...(mesa.river || [])];
+}
+
 /** ¿Hay algo que deshacer? Las antes y las ciegas no se deshacen: las pone la app. */
 export function puedeDeshacer(eventos) {
   const ultimo = eventos[eventos.length - 1];

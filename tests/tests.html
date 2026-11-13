@@ -51,7 +51,10 @@
       validarMesa, resolverJugadores, crearPartida, borradorDePartida, cambiarJuega,
     } from '../js/mesa.js';
     import { POSICIONES, calcularPosiciones, siguienteBoton } from '../js/posiciones.js';
-    import { CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer, eventoDeAccion, eventoDeMesa } from '../js/motor.js';
+    import {
+      CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer, eventoDeAccion, eventoDeMesa,
+      cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
+    } from '../js/motor.js';
     import { cerrarMano } from '../js/manos.js';
     import {
       teclear, formatearTecleado, leerTecleado, numeroATecleado, pasoDeCiegas, tamanoRapido, maximoAllin,
@@ -473,6 +476,35 @@
         'Pasar al flop sin anotar las cartas: se permite, sin aviso', JSON.stringify(evFlop));
       ok(est(m6, [...limp, '2 check']).avisos.length === 0 && calcularEstado({ ...m6, eventos: [...jugar(m6, [...limp, '2 check']).eventos, { tipo: 'mesa', calle: 'flop', cartas: [1, 2] }] }).avisos.length === 1,
         'Un flop con 2 cartas (no 0 ni 3): aviso');
+
+      // Cartas de la mesa (paso 8)
+      const tc = (t) => textoACartas(t);
+      const conMesa = jugar(m6, [...limp, '2 check']);
+      conMesa.eventos.push(eventoDeMesa(calcularEstado(conMesa), tc('Ah Kd 7c')));
+      conMesa.misCartas = tc('As Ks');
+      const sConMesa = calcularEstado(conMesa);
+      ok(sConMesa.calle === 'flop' && sConMesa.avisos.length === 0 && sConMesa.mesa.join(',') === tc('Ah Kd 7c').join(','),
+        'Poner el flop con sus 3 cartas: pasa al flop sin avisos y la mesa las tiene', resumen(sConMesa));
+      ok(JSON.stringify(mesaPorCalle(conMesa.eventos)) === JSON.stringify({ flop: tc('Ah Kd 7c'), turn: null, river: null }),
+        'Cartas por calle: flop puesto; turn y river todavía no (null)');
+      ok(cartasPorCalle('flop') === 3 && cartasPorCalle('turn') === 1 && cartasPorCalle('river') === 1, 'El flop tiene 3 cartas; el turn y el river, 1');
+      ok(cartasConocidas(conMesa).length === 5 && cartasConocidas(conMesa).includes(tc('As')[0]),
+        'Cartas conocidas (no se pueden repetir): las tuyas y las de la mesa');
+      const corregida = cambiarCartasDeMesa(conMesa.eventos, 'flop', tc('Ah Kd 7h'));
+      ok(mesaPorCalle(corregida).flop.join(',') === tc('Ah Kd 7h').join(',') && corregida.length === conMesa.eventos.length
+        && JSON.stringify(calcularEstado({ ...conMesa, eventos: corregida }).turno) === JSON.stringify(sConMesa.turno),
+        'Corregir una carta del flop no cambia nada más de la mano');
+      const flopVacio = { ...m6, eventos: [...jugar(m6, [...limp, '2 check']).eventos, { tipo: 'mesa', calle: 'flop', cartas: [] }] };
+      ok(mesaPorCalle(flopVacio.eventos).flop.length === 0 && mesaPorCalle(flopVacio.eventos).turn === null,
+        'Un flop "sin cartas" es [] (llegó, pero sin anotar), distinto de null (no ha llegado)');
+      const flopCompletado = cambiarCartasDeMesa(flopVacio.eventos, 'flop', tc('2c 3c 4c'));
+      ok(calcularEstado({ ...flopVacio, eventos: flopCompletado }).avisos.length === 0 && mesaPorCalle(flopCompletado).flop.length === 3,
+        'Un flop "sin cartas" se puede completar después, sin avisos');
+      const conTurn = { ...conMesa, eventos: jugar(conMesa, ['1 check', '2 check', '3 check', '5 check', '0 check']).eventos };
+      conTurn.eventos.push(eventoDeMesa(calcularEstado(conTurn), tc('2s')));
+      ok(calcularEstado({ ...conTurn, eventos: deshacer(conTurn.eventos) }).fase === 'cartas'
+        && mesaPorCalle(deshacer(conTurn.eventos)).turn === null,
+        'Deshacer el turn: se quita su carta y la app lo vuelve a pedir');
 
       // Cerrar la mano (manos.js)
       const pCierre = { ...partidaDe(6, 0), manosJugadas: 4 };

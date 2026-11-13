@@ -3,8 +3,9 @@
 // Tres situaciones:
 //  - Entre manos: la mesa con las posiciones de la próxima mano y "Empezar mano N".
 //    (Es el momento de editar la mesa: quién juega, fichas, quién se sienta…)
-//  - Mano en curso: a quién le toca, el bote y los botones Fold / Check / Call, Deshacer.
-//    Al cerrarse una calle, "Pasar al flop/turn/river" (las cartas llegan en el paso 8).
+//  - Mano en curso: a quién le toca, el bote, las acciones (Fold, Check, Call, Apostar, Subir),
+//    Deshacer y la fila de cartas (la mesa y las tuyas). Al cerrarse una calle,
+//    "Poner el flop/turn/river" abre la hoja de cartas.
 //  - Mano terminada: el resultado y "Siguiente mano" (el botón avanza).
 //
 // Regla de guardado: cada toque → se guarda la mano en la base de datos → se pinta.
@@ -12,7 +13,10 @@
 
 import {
   calcularEstado, opciones, eventoDeAccion, eventoDeMesa, deshacer, puedeDeshacer,
+  cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
 } from './motor.js';
+import { crearHojaCartas } from './hoja-cartas.js';
+import { VALORES_TEXTO, SIMBOLOS, NOMBRES_PALOS, valorDe, paloDe } from './cartas.js';
 import { calcularPosiciones } from './posiciones.js';
 import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
@@ -111,12 +115,138 @@ export function iniciarMano() {
   $('btn-apostar').addEventListener('click', pedirCantidad);
   $('btn-subir').addEventListener('click', pedirCantidad);
 
+  // ---- Cartas: las tuyas y las de la mesa, con la hoja de cartas (la misma que la calculadora) ----
+  // Al cerrarse una calle, "Poner el flop/turn/river" abre la hoja. Las cartas ya puestas se
+  // tocan para cambiarlas. Tus cartas se pueden poner o cambiar en cualquier momento.
+  const hojaCartas = crearHojaCartas($('hoja-cartas-mano'), { noCerrarEn: '.carta-mini' });
+  let eligiendo = null; // { tipo: 'mias' | 'mesa', calle, nueva, cartas: [...], indice, soloUna }
+
   $('btn-cartas').addEventListener('click', () => {
     if (!mano) return;
     const estado = calcularEstado(mano);
-    if (estado.fase !== 'cartas') return;
-    cambiarEventos([...mano.eventos, eventoDeMesa(estado)]);
+    if (estado.fase === 'cartas') abrirCalle(estado.faltan, 0);
   });
+
+  function abrirMias(i) {
+    const actuales = [...(mano.misCartas || [])];
+    // Una carta ya puesta se cambia ella sola; si falta alguna, se rellenan en orden
+    const soloUna = i < actuales.length && actuales.length === 2;
+    eligiendo = { tipo: 'mias', cartas: actuales, indice: soloUna ? i : actuales.length, soloUna };
+    abrirHoja();
+  }
+
+  function abrirCalle(calle, i) {
+    const anotadas = mesaPorCalle(mano.eventos)[calle];
+    const total = cartasPorCalle(calle);
+    if (anotadas === null) {
+      // La calle que toca poner: se elige entera y se anota de una vez
+      eligiendo = { tipo: 'mesa', calle, nueva: true, cartas: [], indice: 0, soloUna: false };
+    } else {
+      const completa = anotadas.length === total;
+      eligiendo = { tipo: 'mesa', calle, nueva: false, cartas: completa ? [...anotadas] : [],
+        indice: completa ? i : 0, soloUna: completa };
+    }
+    abrirHoja();
+  }
+
+  // Título de la hoja. Como la hoja tapa la fila de cartas, lleva las ya elegidas en esta
+  // tanda: "Flop: A♠ K♦ · 3ª carta"
+  function tituloEligiendo() {
+    const e = eligiendo;
+    const antes = e.soloUna ? [] : e.cartas.slice(0, e.indice);
+    const elegidas = antes.length ? ': ' + antes.map(textoCarta).join(' ') : '';
+    if (e.tipo === 'mias') return `Tus cartas${elegidas} · ${e.indice + 1}ª`;
+    if (e.calle === 'flop') return `Flop${elegidas} · ${e.indice + 1}ª carta`;
+    return NOMBRE_CALLE[e.calle];
+  }
+
+  function textoCarta(c) {
+    return VALORES_TEXTO[valorDe(c)] + SIMBOLOS[paloDe(c)];
+  }
+
+  // Cartas que no se pueden elegir: todas las conocidas, menos las que se están eligiendo
+  // (que se recogen aparte), más las ya elegidas en esta tanda (menos la que se cambia)
+  function usadasEligiendo() {
+    const propias = eligiendo.tipo === 'mias'
+      ? (mano.misCartas || [])
+      : (mesaPorCalle(mano.eventos)[eligiendo.calle] || []);
+    const usadas = new Set(cartasConocidas(mano));
+    for (const c of propias) usadas.delete(c);
+    eligiendo.cartas.forEach((c, k) => { if (k !== eligiendo.indice && c !== undefined) usadas.add(c); });
+    return usadas;
+  }
+
+  function opcionesHoja() {
+    const botones = [];
+    if (eligiendo.tipo === 'mias') {
+      botones.push({ texto: 'Quitar', desactivado: !(mano.misCartas || []).length, alTocar: quitarMias });
+      botones.push({ texto: 'Listo', acento: true, alTocar: () => hojaCartas.cerrar() });
+    } else {
+      if (eligiendo.nueva) botones.push({ texto: 'Sin cartas', alTocar: calleSinCartas });
+      botones.push({ texto: 'Cancelar', alTocar: () => hojaCartas.cerrar() });
+    }
+    return {
+      titulo: tituloEligiendo(),
+      usadas: usadasEligiendo(),
+      botones,
+      alElegir: cartaElegida,
+      alCerrar: () => { eligiendo = null; pintarCartas(); },
+    };
+  }
+
+  function abrirHoja() {
+    teclado.cerrar();
+    if (hojaCartas.estaAbierta()) hojaCartas.actualizar(opcionesHoja());
+    else hojaCartas.abrir(opcionesHoja());
+    pintarCartas();
+  }
+
+  function cartaElegida(c) {
+    const e = eligiendo;
+    e.cartas[e.indice] = c;
+    if (e.tipo === 'mias') {
+      // Tus cartas se guardan una a una (no son una acción: Deshacer no las quita)
+      guardarCartas({ ...mano, misCartas: e.cartas.filter((x) => x !== undefined) });
+      if (e.soloUna || e.cartas.length >= 2) { hojaCartas.cerrar(); return; }
+      e.indice++;
+      hojaCartas.actualizar(opcionesHoja());
+      return;
+    }
+    const total = cartasPorCalle(e.calle);
+    if (!e.soloUna && e.cartas.length < total) {
+      e.indice++;
+      hojaCartas.actualizar(opcionesHoja());
+      pintarCartas();
+      return;
+    }
+    // Calle completa: se anota (nueva) o se corrige (ya anotada)
+    const eventos = e.nueva
+      ? [...mano.eventos, eventoDeMesa(calcularEstado(mano), e.cartas)]
+      : cambiarCartasDeMesa(mano.eventos, e.calle, e.cartas);
+    hojaCartas.cerrar();
+    if (e.nueva) cambiarEventos(eventos);
+    else guardarCartas({ ...mano, eventos });
+  }
+
+  function calleSinCartas() {
+    const estado = calcularEstado(mano);
+    hojaCartas.cerrar();
+    if (estado.fase === 'cartas') cambiarEventos([...mano.eventos, eventoDeMesa(estado, [])]);
+  }
+
+  function quitarMias() {
+    hojaCartas.cerrar();
+    guardarCartas({ ...mano, misCartas: [] });
+  }
+
+  // Guarda un cambio de cartas (no es una acción nueva) y lo pinta al terminar.
+  // Las escrituras de IndexedDB se hacen en orden, así que dos cartas seguidas no se pisan.
+  function guardarCartas(nueva) {
+    guardarMano(nueva).then(() => {
+      if (mano && mano.id === nueva.id) mano = nueva;
+      pintar();
+    }, avisarFallo);
+  }
 
   $('btn-deshacer').addEventListener('click', () => {
     if (mano && puedeDeshacer(mano.eventos)) cambiarEventos(deshacer(mano.eventos));
@@ -191,6 +321,8 @@ export function iniciarMano() {
     $('btn-empezar-mano').textContent = 'Empezar mano ' + numero;
     $('btn-empezar-mano').disabled = !pos;
     $('btn-deshacer').hidden = true;
+    hojaCartas.cerrar();
+    pintarCartas();
   }
 
   function pintarMano() {
@@ -259,20 +391,84 @@ export function iniciarMano() {
       $('btn-call').textContent = 'Call ' + formatear(o.aPagar);
     } else if (estado.fase === 'cartas') {
       mostrarBotones(['btn-cartas']);
-      $('btn-cartas').textContent = 'Pasar al ' + estado.faltan;
+      $('btn-cartas').textContent = 'Poner el ' + estado.faltan;
     } else {
       mostrarBotones(['btn-siguiente']);
     }
     for (const id of BOTONES) $(id).disabled = false;
     $('btn-deshacer').hidden = false;
     $('btn-deshacer').disabled = !puedeDeshacer(mano.eventos);
+    pintarCartas();
+  }
+
+  // Fila de cartas: Mesa [flop][flop][flop] [turn] [river] · Tú [][]
+  function pintarCartas() {
+    const fila = $('fila-cartas');
+    fila.hidden = !mano;
+    if (!mano) return;
+    const estado = calcularEstado(mano);
+    const mesa = mesaPorCalle(mano.eventos);
+
+    const contMesa = $('cartas-mesa');
+    contMesa.innerHTML = '';
+    const huecos = [['flop', 0], ['flop', 1], ['flop', 2], ['turn', 0], ['river', 0]];
+    for (const [calle, i] of huecos) {
+      const anotadas = mesa[calle];
+      const pendiente = anotadas === null && estado.fase === 'cartas' && estado.faltan === calle;
+      const eligiendoAqui = eligiendo && eligiendo.tipo === 'mesa' && eligiendo.calle === calle;
+      // Mientras se elige, se ven las cartas de esta tanda
+      const c = eligiendoAqui ? eligiendo.cartas[i] : (anotadas ? anotadas[i] : undefined);
+      const nombre = calle === 'flop' ? `Flop, ${i + 1}ª carta` : NOMBRE_CALLE[calle];
+      const b = cartaMini(c, nombre, () => abrirCalle(calle, i));
+      if (calle === 'flop' && i === 2) b.classList.add('flop-ultima');
+      if (calle === 'turn') b.classList.add('turn');
+      b.classList.toggle('pendiente', pendiente || (eligiendoAqui && eligiendo.indice === i));
+      if (anotadas && anotadas.length === 0 && !eligiendoAqui) b.classList.add('sin-anotar');
+      // Una calle que aún no ha llegado (y no es la que toca) no se puede tocar
+      b.disabled = anotadas === null && !pendiente;
+      contMesa.appendChild(b);
+    }
+
+    const contMias = $('cartas-mias');
+    contMias.innerHTML = '';
+    const juego = mano.jugadores.some((j) => j.jugadorId === 'yo');
+    $('etiqueta-mias').hidden = !juego;
+    contMias.hidden = !juego;
+    if (!juego) return;
+    const mias = eligiendo && eligiendo.tipo === 'mias' ? eligiendo.cartas : (mano.misCartas || []);
+    for (let i = 0; i < 2; i++) {
+      const b = cartaMini(mias[i], `Tu ${i + 1}ª carta`, () => abrirMias(i));
+      b.classList.toggle('pendiente', Boolean(eligiendo && eligiendo.tipo === 'mias' && eligiendo.indice === i));
+      contMias.appendChild(b);
+    }
+  }
+
+  function cartaMini(c, nombre, alTocar) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'carta-mini';
+    if (c === undefined || c === null) {
+      b.classList.add('vacia');
+      b.setAttribute('aria-label', nombre + ': sin poner');
+    } else {
+      b.innerHTML = '<span class="carta-valor">' + VALORES_TEXTO[valorDe(c)] + '</span>' +
+        '<span class="carta-palo">' + SIMBOLOS[paloDe(c)] + '</span>';
+      b.classList.add('palo-' + paloDe(c));
+      b.setAttribute('aria-label', nombre + ': ' + VALORES_TEXTO[valorDe(c)] + ' de ' + NOMBRES_PALOS[paloDe(c)]);
+    }
+    b.addEventListener('click', alTocar);
+    return b;
   }
 
   // Texto de lo último que se anotó ("Ana paga 2"), para comprobar de un vistazo
   function describirUltimo() {
     const ev = mano.eventos[mano.eventos.length - 1];
     if (!ev || ev.tipo === 'ciega' || ev.tipo === 'ante') return 'Ciegas puestas.';
-    if (ev.tipo === 'mesa') return NOMBRE_CALLE[ev.calle] + '.';
+    if (ev.tipo === 'mesa') {
+      return NOMBRE_CALLE[ev.calle] + (ev.cartas && ev.cartas.length
+        ? ': ' + ev.cartas.map(textoCarta).join(' ') + '.'
+        : ' (sin anotar las cartas).');
+    }
     const yo = esYo(ev.asiento);
     const cantidad = ev.hasta !== undefined ? ' (hasta ' + formatear(ev.hasta) + ')' : '';
     const n = ev.hasta !== undefined ? formatear(ev.hasta) : '';
@@ -345,7 +541,10 @@ export function iniciarMano() {
 
   // Nada queda pendiente (cada acción se guarda al momento), así que no hace falta guardarYa.
   // Una cantidad a medio teclear no es una acción: si sales, se descarta.
-  return { alEntrar: cargar, alSalir: () => teclado.cerrar() };
+  return {
+    alEntrar: cargar,
+    alSalir: () => { teclado.cerrar(); hojaCartas.cerrar(); },
+  };
 }
 
 function formatear(n) {

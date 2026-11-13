@@ -8,7 +8,7 @@
 // IMPORTANTE: cada vez que cambies cualquier archivo de la app, sube el número de VERSION.
 // Así el iPhone sabe que hay una versión nueva y la descarga.
 
-const VERSION = 'v0.2.11';
+const VERSION = 'v0.2.12';
 const CACHE = 'poker-estudio-' + VERSION;
 
 // Lista de archivos que se guardan para usar sin conexión.
@@ -29,6 +29,7 @@ const ARCHIVOS = [
   './js/motor.js',
   './js/manos.js',
   './js/teclado.js',
+  './js/hoja-cartas.js',
   './js/pantalla-mano.js',
   './js/partidas.js',
   './js/pantalla-inicio.js',

@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.11</p>
+    <p class="version">Versión 0.2.12</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -198,6 +198,13 @@
       <!-- Barra pegada abajo (al alcance del pulgar). Lleva también qué pasa ahora, lo último
            anotado y los avisos: así se ven siempre, aunque la pantalla sea baja. -->
       <div class="barra-acciones">
+        <!-- Cartas de la mesa y las tuyas (las pinta pantalla-mano.js). Se tocan para ponerlas o cambiarlas -->
+        <div id="fila-cartas" class="fila-cartas">
+          <span class="etiqueta-cartas">Mesa</span>
+          <div id="cartas-mesa" class="cartas-mini"></div>
+          <span id="etiqueta-mias" class="etiqueta-cartas">Tú</span>
+          <div id="cartas-mias" class="cartas-mini"></div>
+        </div>
         <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
         <!-- Deshacer va encima de las acciones, no en la fila del pulgar: así no se toca sin querer -->
         <div class="fila-deshacer">
@@ -368,18 +375,12 @@
 
   </main>
 
-  <!-- ===== HOJA INFERIOR PARA ELEGIR CARTAS =====
-       Está fuera de <main> para poder fijarla abajo de la pantalla.
-       Los botones de valores y palos los crea selector.js. -->
-  <div id="hoja" class="hoja" aria-hidden="true">
-    <div class="hoja-cabecera">
-      <span id="hoja-titulo" class="hoja-titulo"></span>
-      <button id="btn-quitar" type="button" class="boton boton-pequeno">Quitar</button>
-      <button id="btn-listo" type="button" class="boton boton-pequeno boton-acento">Listo</button>
-    </div>
-    <div id="rejilla-valores" class="rejilla-valores"></div>
-    <div id="fila-palos" class="fila-palos"></div>
-  </div>
+  <!-- ===== HOJAS INFERIORES PARA ELEGIR CARTAS =====
+       Están fuera de <main> para poder fijarlas abajo de la pantalla.
+       Su contenido (título, botones, valores y palos) lo crea hoja-cartas.js.
+       "hoja": la de la calculadora (selector.js) · "hoja-cartas-mano": la de la mano. -->
+  <div id="hoja" class="hoja" role="dialog" aria-hidden="true"></div>
+  <div id="hoja-cartas-mano" class="hoja" role="dialog" aria-hidden="true"></div>
 
   <!-- type="module": permite usar import/export entre archivos .js -->
   <script type="module" src="js/app.js"></script>
