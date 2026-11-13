@@ -5,6 +5,26 @@
 // Así los botones son enlaces normales (<a href="#calculadora">) y no hace falta nada más.
 
 import { iniciarCalculadora } from './pantalla-calculadora.js';
+import { iniciarAjustes } from './pantalla-ajustes.js';
+import { bd, pedirPersistencia } from './db.js';
+import { mostrarError } from './avisos.js';
+
+// ---- 0. Errores de la base de datos: que nunca fallen en silencio ----
+// Si una operación de guardar o leer falla y nadie lo gestiona, aquí se enseña el mensaje.
+window.addEventListener('unhandledrejection', (evento) => {
+  const motivo = evento.reason;
+  if (motivo && motivo.name === 'ErrorBD') {
+    evento.preventDefault();
+    mostrarError(motivo.message);
+  }
+});
+
+// Abrir la base de datos al arrancar y pedir almacenamiento persistente
+// (para que Safari no borre los datos por su cuenta). El estado se ve en Ajustes.
+bd.abrir()
+  .then(() => pedirPersistencia())
+  .then((estado) => console.info('Almacenamiento persistente:', estado))
+  .catch((error) => mostrarError(error.message));
 
 // ---- 1. Aviso de "sin conexión" ----
 const estadoRed = document.getElementById('estado-red');
@@ -35,10 +55,11 @@ document.getElementById('btn-recargar').addEventListener('click', () => location
 const PANTALLAS = ['inicio', 'jugar', 'manos', 'calculadora', 'ajustes'];
 
 // Cada pantalla con lógica se prepara la primera vez que se abre.
-// Lo que devuelve (p. ej. { alSalir }) se guarda aquí.
+// Lo que devuelve ({ alEntrar, alSalir }, ambos opcionales) se guarda aquí.
 const preparadas = {};
 const INICIAR = {
   calculadora: iniciarCalculadora,
+  ajustes: iniciarAjustes,
 };
 
 let actual = null;
@@ -56,6 +77,7 @@ function mostrarPantalla() {
   if (INICIAR[nombre] && !preparadas[nombre]) {
     preparadas[nombre] = INICIAR[nombre]();
   }
+  if (preparadas[nombre] && preparadas[nombre].alEntrar) preparadas[nombre].alEntrar();
 
   actual = nombre;
   window.scrollTo(0, 0); // cada pantalla empieza arriba

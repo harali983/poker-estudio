@@ -24,14 +24,20 @@
   <ul id="lista-equidad"></ul>
   <h2>Números a la española (campos Bote y A pagar)</h2>
   <ul id="lista-numeros"></ul>
+  <h2>Ajustes</h2>
+  <ul id="lista-ajustes"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
+  <h2>Base de datos (IndexedDB, en una base de datos de prueba aparte)</h2>
+  <ul id="lista-bd"></ul>
 
   <script type="module">
     import { textoACartas } from '../js/cartas.js';
     import { evaluar, categoria, CATEGORIAS } from '../js/evaluador.js';
     import { simular } from '../js/equidad.js';
     import { interpretarNumero } from '../js/numeros.js';
+    import { validarCiegas } from '../js/ajustes.js';
+    import { crearBD, borrarBaseDeDatos, ErrorBD, mensajeParaUsuario } from '../js/db.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -121,25 +127,123 @@
     numero('abc', null, 'no es un número');
     numero('-5', null, 'negativo');
 
+    // ---- Ajustes: validación de las ciegas ----
+    function ciegas(sb, bb, ante, esperado, texto) {
+      const r = validarCiegas(sb, bb, ante);
+      const obtenido = r.error ? 'error' : JSON.stringify(r.ciegas) + (r.aviso ? ' +aviso' : '');
+      anotar('lista-ajustes', obtenido === esperado, texto, `"${sb}" / "${bb}" / "${ante}" → ${obtenido}`);
+    }
+    ciegas('1', '2', '', '{"sb":1,"bb":2,"ante":0}', 'Ciegas normales, ante vacío = 0');
+    ciegas('0,5', '1', '0,1', '{"sb":0.5,"bb":1,"ante":0.1}', 'Con coma decimal');
+    ciegas('500', '1.000', '100', '{"sb":500,"bb":1000,"ante":100}', 'Con punto de miles');
+    ciegas('0', '2', '', '{"sb":0,"bb":2,"ante":0}', 'Ciega pequeña 0 es válida');
+    ciegas('5', '2', '', '{"sb":5,"bb":2,"ante":0} +aviso', 'Pequeña mayor que la grande: se guarda con aviso');
+    ciegas('1', '0', '', 'error', 'Ciega grande 0: error');
+    ciegas('1', '', '', 'error', 'Ciega grande vacía: error');
+    ciegas('abc', '2', '', 'error', 'Ciega pequeña no numérica: error');
+    ciegas('1', '2', 'x', 'error', 'Ante no numérico: error');
+
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----
-    const worker = new Worker(new URL('../js/equidad.worker.js', import.meta.url), { type: 'module' });
-    const inicio = performance.now();
-    worker.onmessage = (e) => {
-      if (!e.data.terminado) return;
-      worker.terminate();
-      document.getElementById('lista-worker').innerHTML = '';
-      const ms = Math.round(performance.now() - inicio);
-      const pct = e.data.equidad * 100;
-      anotar('lista-worker', Math.abs(pct - 85.2) <= 1.5 && ms < 2500,
-        'AA contra 1 mano al azar, en el worker y en menos de 2,5 s',
-        `${pct.toFixed(2)} % ±${(e.data.margen * 100).toFixed(2)} · ${e.data.manos} manos · ${ms} ms`);
-      document.title = 'Tests: ' + (fallidas ? 'FALLAN' : 'OK');
-    };
-    worker.onerror = (e) => {
-      document.getElementById('lista-worker').innerHTML = '';
-      anotar('lista-worker', false, 'El worker no arranca', e.message || '');
-    };
-    worker.postMessage({ mias: textoACartas('As Ah'), mesa: [], rivales: 1 });
+    const pruebaWorker = new Promise((terminar) => {
+      const worker = new Worker(new URL('../js/equidad.worker.js', import.meta.url), { type: 'module' });
+      const inicio = performance.now();
+      worker.onmessage = (e) => {
+        if (!e.data.terminado) return;
+        worker.terminate();
+        document.getElementById('lista-worker').innerHTML = '';
+        const ms = Math.round(performance.now() - inicio);
+        const pct = e.data.equidad * 100;
+        anotar('lista-worker', Math.abs(pct - 85.2) <= 1.5 && ms < 2500,
+          'AA contra 1 mano al azar, en el worker y en menos de 2,5 s',
+          `${pct.toFixed(2)} % ±${(e.data.margen * 100).toFixed(2)} · ${e.data.manos} manos · ${ms} ms`);
+        terminar();
+      };
+      worker.onerror = (e) => {
+        document.getElementById('lista-worker').innerHTML = '';
+        anotar('lista-worker', false, 'El worker no arranca', e.message || '');
+        terminar();
+      };
+      worker.postMessage({ mias: textoACartas('As Ah'), mesa: [], rivales: 1 });
+    });
+
+    // ---- Base de datos (IndexedDB) ----
+    // Usa una base de datos aparte ("poker-estudio-tests") que se borra al empezar y al acabar:
+    // tus datos de verdad no se tocan.
+    async function pruebasBD() {
+      const L = 'lista-bd';
+      const NOMBRE = 'poker-estudio-tests';
+      const ok = (bien, texto, detalle) => anotar(L, bien, texto, detalle);
+      await borrarBaseDeDatos(NOMBRE);
+      const prueba = crearBD(NOMBRE);
+
+      try {
+        const nativa = await prueba.abrir();
+        const almacenes = [...nativa.objectStoreNames].sort().join(', ');
+        ok(almacenes === 'ajustes, jugadores, manos, participaciones, partidas',
+          'Se crean los 5 almacenes del plan', almacenes);
+        const indices = [...nativa.transaction('manos').objectStore('manos').indexNames].sort().join(', ');
+        ok(indices === 'fecha, partidaId', 'El almacén "manos" tiene sus índices', indices);
+
+        await prueba.guardar('jugadores', { id: 'yo', nombre: 'Yo' });
+        await prueba.guardar('jugadores', { id: 'j1', nombre: 'Ana' });
+        const ana = await prueba.leer('jugadores', 'j1');
+        ok(ana && ana.nombre === 'Ana', 'Guardar y leer un jugador', JSON.stringify(ana));
+
+        await prueba.guardar('jugadores', { id: 'j1', nombre: 'Ana López' });
+        const todos = await prueba.listar('jugadores');
+        ok(todos.length === 2 && todos.some((j) => j.nombre === 'Ana López'),
+          'Guardar con el mismo id reemplaza (no duplica)', todos.map((j) => j.nombre).join(', '));
+
+        ok(await prueba.leer('jugadores', 'nadie') === undefined, 'Leer algo que no existe devuelve undefined');
+
+        await prueba.guardarVarios('manos', [
+          { id: 'm1', partidaId: 'p1', fecha: '2026-11-20T21:00' },
+          { id: 'm2', partidaId: 'p1', fecha: '2026-11-20T21:05' },
+          { id: 'm3', partidaId: 'p2', fecha: '2026-11-21T20:00' },
+        ]);
+        const deP1 = await prueba.listar('manos', 'partidaId', 'p1');
+        ok(deP1.length === 2, 'Listar las manos de una partida (por índice)', deP1.map((m) => m.id).join(', '));
+
+        await prueba.borrar('manos', 'm1');
+        ok((await prueba.listar('manos')).length === 2, 'Borrar una mano');
+
+        ok(await prueba.leerAjuste('unidad', 'fichas') === 'fichas', 'Ajuste sin guardar → valor por defecto');
+        await prueba.guardarAjuste('unidad', 'bb');
+        ok(await prueba.leerAjuste('unidad', 'fichas') === 'bb', 'Guardar y leer un ajuste');
+
+        // Un fallo de verdad: guardar un objeto sin id. Tiene que dar un ErrorBD con mensaje claro
+        let error = null;
+        try { await prueba.guardar('jugadores', { nombre: 'Sin id' }); } catch (e) { error = e; }
+        ok(error instanceof ErrorBD && error.message.length > 20,
+          'Un fallo al guardar da un error con mensaje claro (no falla en silencio)', error ? error.message : 'no hubo error');
+
+        // Guardar varios es "todo o nada": si uno falla, no se guarda ninguno
+        error = null;
+        try {
+          await prueba.guardarVarios('jugadores', [{ id: 'j2', nombre: 'Bea' }, { nombre: 'Sin id' }]);
+        } catch (e) { error = e; }
+        ok(error instanceof ErrorBD && await prueba.leer('jugadores', 'j2') === undefined,
+          'Guardar varios: si uno falla, no se guarda ninguno');
+
+        // La conexión se reabre sola si se cierra
+        await prueba.cerrar();
+        ok((await prueba.leer('jugadores', 'yo')).nombre === 'Yo', 'Tras cerrar la conexión, se reabre sola');
+      } catch (e) {
+        ok(false, 'Error inesperado en las pruebas de la base de datos', e.message);
+      } finally {
+        await prueba.cerrar();
+        await borrarBaseDeDatos(NOMBRE);
+      }
+
+      // Mensajes de error que verá la persona (sin necesidad de llenar el iPhone de verdad)
+      const sinEspacio = mensajeParaUsuario(new DOMException('lleno', 'QuotaExceededError'));
+      ok(sinEspacio.includes('espacio'), 'Mensaje claro si no queda espacio', sinEspacio);
+      const noDisponible = mensajeParaUsuario(new DOMException('x', 'InvalidStateError'));
+      ok(noDisponible.includes('no está disponible'), 'Mensaje claro si la base de datos no está disponible', noDisponible);
+    }
+
+    await Promise.all([pruebaWorker, pruebasBD()]);
+    document.title = 'Tests: ' + (fallidas ? 'FALLAN' : 'OK');
   </script>
 </body>
 </html>

@@ -38,6 +38,12 @@
     <button id="btn-recargar" type="button" class="boton boton-pequeno">Recargar</button>
   </div>
 
+  <!-- Barra roja para errores importantes (p. ej. sin espacio para guardar). La maneja avisos.js -->
+  <div id="aviso-error" class="aviso-error" role="alert" hidden>
+    <span id="aviso-error-texto"></span>
+    <button id="btn-cerrar-error" type="button" class="boton boton-pequeno" aria-label="Cerrar aviso">✕</button>
+  </div>
+
   <main class="contenedor">
 
   <!-- ==================== PANTALLA: INICIO ==================== -->
@@ -72,7 +78,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.1</p>
+    <p class="version">Versión 0.2.2</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -105,10 +111,41 @@
       <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
       <h1>Ajustes</h1>
     </header>
-    <div class="tarjeta proximamente">
-      <p><strong>Próximamente.</strong> Ciegas por defecto y mostrar cantidades en fichas o en ciegas grandes (BB).</p>
-      <p class="texto-suave texto-pequeno">Fase 2, paso 2.</p>
-    </div>
+    <!-- Los cambios se guardan solos (pantalla-ajustes.js) -->
+    <section class="tarjeta">
+      <h2>Ciegas por defecto</h2>
+      <div class="fila campos">
+        <label>Pequeña
+          <input id="ajuste-sb" type="text" inputmode="decimal" autocomplete="off">
+        </label>
+        <label>Grande
+          <input id="ajuste-bb" type="text" inputmode="decimal" autocomplete="off">
+        </label>
+        <label>Ante
+          <input id="ajuste-ante" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        </label>
+      </div>
+      <p id="ajuste-ciegas-aviso" class="aviso-campo" hidden></p>
+      <p class="ayuda texto-suave texto-pequeno">Se usan al preparar una mesa nueva; en cada partida se pueden cambiar.</p>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Mostrar cantidades en</h2>
+      <div class="segmentado" role="radiogroup" aria-label="Unidad de las cantidades">
+        <button type="button" class="boton" role="radio" data-unidad="fichas">Fichas</button>
+        <button type="button" class="boton" role="radio" data-unidad="bb">Ciegas grandes (BB)</button>
+      </div>
+      <p class="ayuda texto-suave texto-pequeno">Ejemplo: con ciega grande 2, una apuesta de 50 fichas se verá como "25 BB".</p>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Datos guardados en este iPhone</h2>
+      <p>Guardado persistente: <strong id="estado-persistencia">comprobando…</strong></p>
+      <p id="explicacion-persistencia" class="texto-suave texto-pequeno"></p>
+      <p>Espacio usado: <strong id="espacio-usado">–</strong></p>
+    </section>
+
+    <p id="ajustes-guardado" class="guardado" aria-live="polite"></p>
   </section>
 
   <!-- ==================== PANTALLA: CALCULADORA (Fase 1) ==================== -->

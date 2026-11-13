@@ -284,6 +284,29 @@ h2 {
 }
 .proximamente p { margin: 12px 0; }
 
+/* ===== Ajustes ===== */
+.aviso-campo { margin: 8px 0 0; color: #f5c451; font-size: 0.9rem; }
+.aviso-campo.aviso-campo-error { color: var(--malo); }
+.segmentado { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.segmentado .boton.elegido { background: var(--acento); color: #0b1a10; font-weight: 600; }
+.guardado { min-height: 1.4em; text-align: center; color: var(--acento); }
+
+/* ===== Aviso de error (barra roja) ===== */
+.aviso-error {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background: #5c1f1f;
+  color: #ffe1e1;
+  line-height: 1.35;
+}
+.aviso-error .boton { flex-shrink: 0; }
+
 /* ===== Aviso de versión nueva ===== */
 .aviso-version {
   position: sticky;
