@@ -5,12 +5,13 @@
 // "Guardar cambios".
 
 import {
-  crearBorrador, cambiarNumJugadores, sentarme, ponerBoton, cambiarAsiento, fichasParaTodos,
+  crearBorrador, cambiarNumJugadores, sentarme, ponerBoton, cambiarAsiento, cambiarJuega, fichasParaTodos,
   nombreDeAsiento, posicionEnMesa, validarMesa, borradorDePartida, normalizar,
   MIN_JUGADORES, MAX_JUGADORES,
 } from './mesa.js';
+import { calcularPosiciones } from './posiciones.js';
 import {
-  partidaEnCurso, rivalesConocidos, nombresDeJugadores, guardarMesa, terminarPartida,
+  partidaEnCurso, rivalesConocidos, nombresDeJugadores, guardarMesa, terminarPartida, siguienteMano,
   leerBorrador, guardarBorrador, borrarBorrador,
 } from './partidas.js';
 import { leerAjustes } from './ajustes.js';
@@ -92,6 +93,9 @@ export function iniciarMesa() {
   function pintarMesa() {
     ovalo.querySelectorAll('.asiento-mesa, .ficha-boton').forEach((el) => el.remove());
     const n = borrador.asientos.length;
+    // Posiciones de la próxima mano (null si juegan menos de 2)
+    const pos = calcularPosiciones(borrador.asientos, borrador.boton);
+    const conBoton = pos ? pos.boton : borrador.boton;
 
     borrador.asientos.forEach((a, i) => {
       const p = posicionEnMesa(i, n, borrador.miAsiento);
@@ -101,9 +105,19 @@ export function iniciarMesa() {
       boton.style.left = p.x + '%';
       boton.style.top = p.y + '%';
       const esYo = i === borrador.miAsiento;
+      const juega = a.juega !== false;
       boton.classList.toggle('yo', esYo);
       boton.classList.toggle('sin-nombre', !esYo && !a.nombre.trim());
+      boton.classList.toggle('no-juega', !juega);
       boton.classList.toggle('seleccionado', i === seleccionado);
+
+      // Posición en la próxima mano (BTN, SB, BB, UTG…), o "fuera" si no juega
+      const etiqueta = document.createElement('span');
+      etiqueta.className = 'asiento-posicion';
+      const posicion = juega && pos ? pos.porAsiento[i].posicion : (juega ? '' : 'fuera');
+      etiqueta.textContent = posicion;
+      etiqueta.hidden = !posicion;
+      boton.appendChild(etiqueta);
 
       // En la mesa, un asiento vacío muestra solo su número ("Asiento 3" no cabe)
       const nombre = document.createElement('span');
@@ -119,12 +133,13 @@ export function iniciarMesa() {
       const descripcion = esYo ? 'Tú, asiento ' + (i + 1)
         : a.nombre.trim() ? a.nombre.trim() + ', asiento ' + (i + 1)
         : 'Asiento ' + (i + 1) + ', vacío';
-      boton.setAttribute('aria-label', descripcion + (i === borrador.boton ? ', con el botón' : ''));
+      const detalle = !juega ? ', no juega' : posicion ? ', ' + posicion : '';
+      boton.setAttribute('aria-label', descripcion + detalle + (i === conBoton ? ', con el botón' : ''));
       boton.addEventListener('click', () => abrirEditor(i));
       ovalo.appendChild(boton);
 
       // Ficha del botón (D): entre el asiento y el centro de la mesa
-      if (i === borrador.boton) {
+      if (i === conBoton) {
         const ficha = document.createElement('span');
         ficha.className = 'ficha-boton';
         ficha.textContent = 'D';
@@ -171,6 +186,10 @@ export function iniciarMesa() {
     cambiar(ponerBoton(borrador, seleccionado));
   });
 
+  $('editor-juega').addEventListener('change', (e) => {
+    cambiar(cambiarJuega(borrador, seleccionado, e.target.checked));
+  });
+
   function pintarEditor() {
     editor.hidden = seleccionado === null;
     $('mesa-pista').hidden = seleccionado !== null;
@@ -182,8 +201,10 @@ export function iniciarMesa() {
     $('editor-nombre-bloque').hidden = esYo;
     $('editor-fichas-bloque').hidden = !borrador.conFichas;
     $('btn-sentarme').hidden = esYo;
+    const juega = borrador.asientos[i].juega !== false;
+    $('editor-juega').checked = juega;
     const tieneBoton = i === borrador.boton;
-    $('btn-boton-aqui').disabled = tieneBoton;
+    $('btn-boton-aqui').disabled = tieneBoton || !juega; // el botón solo lo tiene alguien que juega
     $('btn-boton-aqui').textContent = tieneBoton ? 'Tiene el botón' : 'Dar el botón';
     if (!esYo) pintarConocidos(i);
   }
@@ -270,6 +291,22 @@ export function iniciarMesa() {
     pintar();
   });
 
+  // "Siguiente mano": el botón pasa al siguiente que juega y se guarda al momento
+  $('btn-siguiente-mano').addEventListener('click', async () => {
+    if (!partida || sinGuardar) return;
+    const btn = $('btn-siguiente-mano');
+    btn.disabled = true;
+    try {
+      partida = await siguienteMano(partida);
+      borrador = ponerBoton(borrador, partida.boton);
+      textoGuardado.textContent = 'El botón pasa a: ' + nombreDeAsiento(borrador, partida.boton) + ' ✓';
+      setTimeout(() => { textoGuardado.textContent = ''; }, 2500);
+    } catch (error) {
+      avisarFallo(error);
+    }
+    pintar();
+  });
+
   btnTerminar.addEventListener('click', async () => {
     if (!confirm('¿Terminar la partida? Seguirá guardada, pero ya no se podrán añadir manos.')) return;
     try {
@@ -311,6 +348,9 @@ export function iniciarMesa() {
     btnPrincipal.textContent = partida ? 'Guardar cambios' : 'Empezar partida';
     btnPrincipal.disabled = errores.length > 0 || (Boolean(partida) && !sinGuardar);
     btnTerminar.hidden = !partida;
+    $('bloque-siguiente').hidden = !partida;
+    $('btn-siguiente-mano').disabled = sinGuardar;
+    $('siguiente-pista').hidden = !sinGuardar;
   }
 
   function avisarFallo(error) {

@@ -19,6 +19,7 @@
 // fácil de probar y no hay sorpresas.
 
 import { validarCiegas } from './ajustes.js';
+import { asientosQueJuegan, botonEfectivo } from './posiciones.js';
 
 export const MIN_JUGADORES = 2;
 export const MAX_JUGADORES = 9;
@@ -92,6 +93,19 @@ export function ponerBoton(borrador, j) {
   return { ...borrador, boton: j };
 }
 
+/**
+ * Marca si el asiento j juega las próximas manos (alguien se ausenta un rato o vuelve).
+ * Si el que tenía el botón deja de jugar, el botón pasa al siguiente que juega.
+ */
+export function cambiarJuega(borrador, j, juega) {
+  const nuevo = cambiarAsiento(borrador, j, { juega });
+  if (!juega && j === borrador.boton) {
+    const siguiente = botonEfectivo(nuevo.asientos, j);
+    if (siguiente !== null) nuevo.boton = siguiente;
+  }
+  return nuevo;
+}
+
 /** Cambia datos de un asiento (nombre, jugadorId, fichas…). */
 export function cambiarAsiento(borrador, j, cambios) {
   const asientos = borrador.asientos.map((a, i) => (i === j ? { ...a, ...cambios } : a));
@@ -134,6 +148,10 @@ export function validarMesa(borrador) {
   const ciegas = validarCiegas(borrador.ciegasTexto.sb, borrador.ciegasTexto.bb, borrador.ciegasTexto.ante);
   if (ciegas.error) errores.push(ciegas.error);
   else if (ciegas.aviso) avisos.push(ciegas.aviso);
+
+  if (asientosQueJuegan(borrador.asientos).length < 2) {
+    errores.push('Tienen que jugar al menos 2 jugadores.');
+  }
 
   // El mismo nombre en dos asientos
   const vistos = new Map();

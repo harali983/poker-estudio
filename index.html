@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.4</p>
+    <p class="version">Versión 0.2.5</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -115,6 +115,10 @@
       </div>
       <label id="editor-fichas-bloque" class="campo">Fichas
         <input id="editor-fichas" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+      </label>
+      <label class="interruptor">
+        <input id="editor-juega" type="checkbox">
+        <span>Juega las próximas manos</span>
       </label>
       <div class="fila-botones">
         <button id="btn-sentarme" type="button" class="boton">Sentarme aquí</button>
@@ -160,6 +164,10 @@
     <ul id="mesa-mensajes" class="mensajes" aria-live="polite"></ul>
     <p id="mesa-guardado" class="guardado" aria-live="polite"></p>
     <button id="btn-empezar" type="button" class="boton boton-ancho boton-acento">Empezar partida</button>
+    <div id="bloque-siguiente" hidden>
+      <button id="btn-siguiente-mano" type="button" class="boton boton-ancho">Siguiente mano · mover el botón</button>
+      <p id="siguiente-pista" class="texto-suave texto-pequeno centrado" hidden>Guarda los cambios antes de pasar a la siguiente mano.</p>
+    </div>
     <button id="btn-terminar" type="button" class="boton boton-ancho boton-peligro" hidden>Terminar partida</button>
   </section>
 

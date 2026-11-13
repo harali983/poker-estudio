@@ -28,6 +28,8 @@
   <ul id="lista-ajustes"></ul>
   <h2>Mesa</h2>
   <ul id="lista-mesa"></ul>
+  <h2>Posiciones y botón</h2>
+  <ul id="lista-posiciones"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
   <h2>Base de datos (IndexedDB, en una base de datos de prueba aparte)</h2>
@@ -42,8 +44,9 @@
     import { crearBD, borrarBaseDeDatos, ErrorBD, mensajeParaUsuario } from '../js/db.js';
     import {
       crearBorrador, cambiarNumJugadores, sentarme, cambiarAsiento, fichasParaTodos, posicionEnMesa,
-      validarMesa, resolverJugadores, crearPartida, borradorDePartida,
+      validarMesa, resolverJugadores, crearPartida, borradorDePartida, cambiarJuega,
     } from '../js/mesa.js';
+    import { POSICIONES, calcularPosiciones, siguienteBoton } from '../js/posiciones.js';
 
     let correctas = 0;
     let fallidas = 0;
@@ -233,6 +236,72 @@
       const vuelta = borradorDePartida(partida, new Map([['j-ana', 'Ana'], ['nuevo1', 'Carlos Pérez']]));
       ok(nombres(vuelta) === '· Ana Carlos Pérez ·' && vuelta.ciegasTexto.bb === '1000' && vuelta.boton === 2,
         'Editar una partida guardada recupera nombres, ciegas y botón', nombres(vuelta));
+    }
+
+    // ---- Posiciones y botón (posiciones.js) ----
+    {
+      const ok = (bien, texto, detalle = '') => anotar('lista-posiciones', bien, texto, detalle);
+      // Mesa de n asientos; "fuera" = asientos que no juegan
+      const mesa = (n, fuera = []) => Array.from({ length: n }, (_, i) => ({ asiento: i, juega: !fuera.includes(i) }));
+      // "asiento:posición" en el orden de antes del flop
+      const orden = (p) => p.preflop.map((a) => a + ':' + p.porAsiento[a].posicion).join(' ');
+
+      // La tabla del plan (2.2), de 2 a 9 jugadores, con el botón en el asiento 0
+      for (let n = 2; n <= 9; n++) {
+        const p = calcularPosiciones(mesa(n), 0);
+        const nombres = p.preflop.map((a) => p.porAsiento[a].posicion).join(', ');
+        const btn = p.porAsiento[0].posicion;
+        ok(nombres === POSICIONES[n].join(', ') && (btn === 'BTN' || btn === 'BTN/SB') && p.preflop.length === n,
+          `${n} jugadores: posiciones en orden de habla`, nombres);
+      }
+
+      const p6 = calcularPosiciones(mesa(6), 0);
+      ok(orden(p6) === '3:UTG 4:MP 5:CO 0:BTN 1:SB 2:BB', '6 jugadores, botón en el 0: habla primero el de la izquierda de la BB', orden(p6));
+      ok(p6.postflop.join(',') === '1,2,3,4,5,0', 'Después del flop empieza la SB y el botón habla el último', p6.postflop.join(','));
+      ok(p6.sb === 1 && p6.bb === 2, 'Ciegas: SB a la izquierda del botón y BB a la izquierda de la SB');
+
+      const p6b4 = calcularPosiciones(mesa(6), 4);
+      ok(orden(p6b4) === '1:UTG 2:MP 3:CO 4:BTN 5:SB 0:BB', 'Botón en el 4: las posiciones dan la vuelta a la mesa', orden(p6b4));
+
+      // Mano a mano
+      const hu = calcularPosiciones(mesa(2), 1);
+      ok(hu.sb === 1 && hu.bb === 0 && hu.preflop.join(',') === '1,0' && hu.postflop.join(',') === '0,1',
+        'Mano a mano: el botón pone la SB, habla primero antes del flop y el último después',
+        `SB ${hu.sb} · BB ${hu.bb} · antes ${hu.preflop} · después ${hu.postflop}`);
+      ok(hu.porAsiento[1].grupo === 'tardía' && hu.porAsiento[0].grupo === 'ciegas', 'Mano a mano: BTN/SB es posición tardía; BB, ciegas');
+
+      // Grupos
+      const p9 = calcularPosiciones(mesa(9), 0);
+      const grupos = p9.preflop.map((a) => p9.porAsiento[a].grupo).join(', ');
+      ok(grupos === 'temprana, temprana, media, media, media, tardía, tardía, ciegas, ciegas', 'Grupos con 9 jugadores', grupos);
+
+      // Asientos que no juegan
+      const fuera = calcularPosiciones(mesa(6, [2, 4]), 0);
+      ok(orden(fuera) === '5:UTG 0:BTN 1:SB 3:BB', '6 asientos y 2 no juegan: se calcula como mesa de 4 y se saltan', orden(fuera));
+      const sinBtn = calcularPosiciones(mesa(6, [2]), 2);
+      ok(sinBtn.boton === 3 && sinBtn.porAsiento[3].posicion === 'BTN',
+        'Si el del botón no juega, el botón es del siguiente que juega', 'botón = ' + sinBtn.boton);
+      const dosFuera = calcularPosiciones(mesa(3, [0]), 0);
+      ok(dosFuera.porAsiento[1].posicion === 'BTN/SB' && dosFuera.bb === 2, '3 asientos y 1 no juega: mano a mano', orden(dosFuera));
+      ok(calcularPosiciones(mesa(4, [1, 2, 3]), 0) === null, 'Si juega 1 solo, no hay mano (null)');
+
+      // Siguiente mano
+      ok(siguienteBoton(mesa(6), 0) === 1 && siguienteBoton(mesa(6), 5) === 0, 'Siguiente mano: el botón pasa a la izquierda y da la vuelta');
+      ok(siguienteBoton(mesa(6, [1, 2]), 0) === 3, 'Siguiente mano: se salta los asientos que no juegan', 'botón = ' + siguienteBoton(mesa(6, [1, 2]), 0));
+      ok(siguienteBoton(mesa(6, [2]), 2) === 4, 'Si el botón estaba en uno que no juega, avanza desde el botón de verdad (3 → 4)', 'botón = ' + siguienteBoton(mesa(6, [2]), 2));
+      ok(siguienteBoton(mesa(2), 0) === 1 && siguienteBoton(mesa(2), 1) === 0, 'Mano a mano: el botón se alterna');
+      let b = 0;
+      const vistos = [];
+      for (let k = 0; k < 9; k++) { vistos.push(b); b = siguienteBoton(mesa(9), b); }
+      ok(b === 0 && new Set(vistos).size === 9, '9 manos seguidas con 9 jugadores: cada uno tiene el botón una vez', vistos.join(','));
+
+      // En la mesa (mesa.js)
+      const borr = { ...crearBorrador(6, { sb: 1, bb: 2 }), boton: 3 };
+      const sinEl3 = cambiarJuega(borr, 3, false);
+      ok(sinEl3.asientos[3].juega === false && sinEl3.boton === 4, 'Si el del botón deja de jugar, el botón pasa al siguiente', 'botón = ' + sinEl3.boton);
+      ok(cambiarJuega(borr, 1, false).boton === 3, 'Si deja de jugar otro, el botón no se mueve');
+      const unoSolo = [1, 2, 3, 4, 5].reduce((acc, i) => cambiarJuega(acc, i, false), borr);
+      ok(validarMesa(unoSolo).errores.includes('Tienen que jugar al menos 2 jugadores.'), 'Si solo juega 1: error al validar la mesa');
     }
 
     // ---- Web Worker: comprobar que arranca y responde (como en la app) ----

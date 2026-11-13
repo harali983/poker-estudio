@@ -344,6 +344,19 @@ h2 {
   font-weight: 600;
 }
 .asiento-fichas { font-size: 0.72rem; color: var(--texto-suave); }
+/* Posición en la próxima mano (BTN, SB, BB, UTG…) */
+.asiento-posicion {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5c451;
+}
+.asiento-mesa.no-juega { opacity: 0.45; border-style: dashed; }
+.asiento-mesa.no-juega .asiento-posicion { color: var(--texto-suave); font-weight: 400; }
 .ficha-boton {
   position: absolute;
   transform: translate(-50%, -50%);
