@@ -333,7 +333,8 @@ h2 {
 .asiento-mesa:active { transform: translate(-50%, -50%) scale(0.95); }
 .asiento-mesa.yo { border-color: var(--acento); background: #1f4d33; }
 .asiento-mesa.seleccionado { box-shadow: 0 0 0 3px var(--acento); }
-.asiento-mesa.sin-nombre .asiento-nombre { color: var(--texto-suave); font-weight: 400; font-style: italic; }
+.asiento-mesa.sin-nombre { border-style: dashed; }
+.asiento-mesa.sin-nombre .asiento-nombre { color: var(--texto-suave); font-weight: 400; font-size: 1.05rem; }
 .asiento-nombre {
   max-width: 60px;
   overflow: hidden;

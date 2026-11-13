@@ -105,9 +105,10 @@ export function iniciarMesa() {
       boton.classList.toggle('sin-nombre', !esYo && !a.nombre.trim());
       boton.classList.toggle('seleccionado', i === seleccionado);
 
+      // En la mesa, un asiento vacío muestra solo su número ("Asiento 3" no cabe)
       const nombre = document.createElement('span');
       nombre.className = 'asiento-nombre';
-      nombre.textContent = nombreDeAsiento(borrador, i);
+      nombre.textContent = esYo || a.nombre.trim() ? nombreDeAsiento(borrador, i) : String(i + 1);
       boton.appendChild(nombre);
       if (borrador.conFichas) {
         const fichas = document.createElement('span');
@@ -115,8 +116,10 @@ export function iniciarMesa() {
         fichas.textContent = a.fichas > 0 ? formatear(a.fichas) : 'sin fichas';
         boton.appendChild(fichas);
       }
-      boton.setAttribute('aria-label',
-        nombreDeAsiento(borrador, i) + ', asiento ' + (i + 1) + (i === borrador.boton ? ', con el botón' : ''));
+      const descripcion = esYo ? 'Tú, asiento ' + (i + 1)
+        : a.nombre.trim() ? a.nombre.trim() + ', asiento ' + (i + 1)
+        : 'Asiento ' + (i + 1) + ', vacío';
+      boton.setAttribute('aria-label', descripcion + (i === borrador.boton ? ', con el botón' : ''));
       boton.addEventListener('click', () => abrirEditor(i));
       ovalo.appendChild(boton);
 
@@ -315,15 +318,18 @@ export function iniciarMesa() {
     mostrarError(error instanceof ErrorBD ? error.message : 'Error inesperado en la mesa: ' + error.message);
   }
 
+  // Guardar ya el borrador pendiente (si sales, cambias de app o se cierra justo después de escribir)
+  function guardarYa() {
+    if (temporizadorBorrador) {
+      clearTimeout(temporizadorBorrador);
+      guardarBorradorYa();
+    }
+  }
+
   return {
     alEntrar: cargar,
-    alSalir() {
-      // Guardar ya el borrador pendiente (si sales justo después de escribir)
-      if (temporizadorBorrador) {
-        clearTimeout(temporizadorBorrador);
-        guardarBorradorYa();
-      }
-    },
+    alSalir: guardarYa,
+    guardarYa,
   };
 }
 

@@ -89,3 +89,17 @@ function mostrarPantalla() {
 
 window.addEventListener('hashchange', mostrarPantalla);
 mostrarPantalla();
+
+// ---- 4. Guardar lo pendiente antes de que iOS congele o cierre la app ----
+// "visibilitychange" (oculta): cambias de app, bloqueas el iPhone o vas a la pantalla de inicio.
+// "pagehide": la página se cierra o se descarga. Después de esto, iOS puede cerrar la app
+// sin avisar, así que cualquier guardado que estuviera esperando se hace ya.
+function guardarTodoLoPendiente() {
+  for (const pantalla of Object.values(preparadas)) {
+    if (pantalla && pantalla.guardarYa) pantalla.guardarYa();
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') guardarTodoLoPendiente();
+});
+window.addEventListener('pagehide', guardarTodoLoPendiente);

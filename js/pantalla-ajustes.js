@@ -101,15 +101,18 @@ export function iniciarAjustes() {
       : 'el navegador no lo indica';
   }
 
+  // Guardar ya lo pendiente (si sales, cambias de app o se cierra justo después de escribir)
+  function guardarYa() {
+    if (temporizadorCiegas) {
+      clearTimeout(temporizadorCiegas);
+      guardarCiegas();
+    }
+  }
+
   return {
     alEntrar: actualizarAlmacenamiento,
-    alSalir() {
-      // Si sales justo después de escribir, guardar ya lo pendiente
-      if (temporizadorCiegas) {
-        clearTimeout(temporizadorCiegas);
-        guardarCiegas();
-      }
-    },
+    alSalir: guardarYa,
+    guardarYa,
   };
 }
 

@@ -220,6 +220,13 @@
       ok(r.nuevos.length === 1 && r.nuevos[0].nombre === 'Carlos Pérez', 'El jugador nuevo se guarda con el nombre limpio', r.nuevos[0]?.nombre);
       ok(r.asientos.every((a) => a.fichas === null), 'Sin "llevar fichas", no se guardan fichas');
 
+      // Un rival que se llama "Yo" no se mezcla contigo
+      const conYo = [{ id: 'yo', nombre: 'Yo' }, { id: 'j-ana', nombre: 'Ana' }];
+      const rYo = resolverJugadores(conNombres(crearBorrador(3, { sb: 1, bb: 2 }), [[1, 'yo'], [2, ' YO ']]), conYo, nuevoId, '2026-11-13');
+      const idsYo = rYo.asientos.map((a) => a.jugadorId);
+      ok(idsYo[0] === 'yo' && idsYo[1] !== 'yo' && idsYo[1] === idsYo[2] && rYo.nuevos.length === 1,
+        'Un rival llamado "Yo" es un jugador nuevo, no tú', idsYo.join(','));
+
       const partida = crearPartida({ ...mesaR, ciegasTexto: { sb: '500', bb: '1.000', ante: '' }, boton: 2 }, r.asientos, 'p1', '2026-11-13');
       ok(partida.estado === 'en-curso' && partida.ciegas.bb === 1000 && partida.boton === 2 && partida.formato === 1,
         'La partida se crea en curso, con las ciegas como números', JSON.stringify(partida.ciegas));

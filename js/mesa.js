@@ -170,7 +170,11 @@ export function validarMesa(borrador) {
  * Devuelve { asientos: [{ asiento, jugadorId, fichas, juega }], nuevos: [jugadores a guardar] }.
  */
 export function resolverJugadores(borrador, conocidos, nuevoId, ahora) {
-  const porNombre = new Map(conocidos.map((j) => [normalizar(j.nombre), j]));
+  // Tu propio jugador ("yo") nunca se busca por nombre: un rival que se llame "Yo"
+  // (o como tú) es otra persona y no debe mezclarse contigo
+  const porNombre = new Map(conocidos
+    .filter((j) => j.id !== 'yo')
+    .map((j) => [normalizar(j.nombre), j]));
   const nuevos = [];
 
   const asientos = borrador.asientos.map((a, i) => {
