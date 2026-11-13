@@ -154,6 +154,10 @@ h2 {
 .contador strong { font-size: 1.4rem; min-width: 1.5em; text-align: center; }
 
 .campos label { flex: 1; display: flex; flex-direction: column; gap: 4px; color: var(--texto-suave); font-size: 0.85rem; }
+/* min-width: 0 y width: 100%: sin esto, los <input> tienen un ancho por defecto y
+   la página se hace más ancha que el móvil (la hoja de cartas quedaba fuera de la vista) */
+.campos label { min-width: 0; }
+.campos input { width: 100%; min-width: 0; }
 .campos input {
   min-height: 44px;
   padding: 0 12px;
