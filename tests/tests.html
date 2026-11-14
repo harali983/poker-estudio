@@ -734,6 +734,34 @@
           'Con escalera hecha, el proyecto de color sigue contando (mejora a color)', textoMano(escYColor));
         okD(textoMano(desc('Kh Qd', 'Kc 7s 2d')) === 'Pareja de K (la más alta de la mesa) con Q' && textoMano(null) === '',
           'Texto para la pantalla: la mano y, si hay, los proyectos');
+
+        // Outs sucios: una carta que da escalera pero pone 5 del mismo palo en la mesa no es out
+        const sucio = desc('Tc Ac', '4d Td Jd Qd');
+        okD(sucio.proyectos.map((p) => p.tipo).join() === 'escalera-interna' && sucio.outs === 3
+          && !sucio.cartasOut.includes(textoACartas('Kd')[0]) && sucio.textoProyectos.startsWith('Escalera interna (3 outs'),
+          'T♣ A♣ con 4♦ 10♦ J♦ Q♦: la K♦ da escalera pero la mesa hace color → 3 outs, no 4', textoMano(sucio));
+        const limpioFlop = desc('Tc Ac', 'Td Jd Qd');
+        okD(limpioFlop.outs === 4 && limpioFlop.cartasOut.includes(textoACartas('Kd')[0]),
+          'En el flop (T♦ J♦ Q♦) la K♦ deja 4 ♦ en la mesa, no 5: sigue siendo out (4 outs)', textoMano(limpioFlop));
+        const sucioDoble = desc('9c 8s', '7d 6d 2d Kd');
+        okD(sucioDoble.proyectos[0].tipo === 'escalera-abierta' && sucioDoble.outs === 6,
+          'Abierta con 4 ♦ en la mesa: el 5♦ y el 10♦ hacen color de la mesa → 6 outs, no 8', textoMano(sucioDoble));
+
+        // Peligro de color
+        okD(sucio.peligro && sucio.peligro.nivel === 'alto' && sucio.peligro.texto === '4 ♦︎ en la mesa: cualquier rival con un ♦︎ tiene color',
+          '4 ♦ en la mesa y tú sin ninguno: aviso fuerte', sucio.peligro && sucio.peligro.texto);
+        const suave = desc('Ac Kc', '2d 7d Jd');
+        okD(suave.peligro && suave.peligro.nivel === 'suave' && suave.peligro.texto === '3 ♦︎ en la mesa: posible color',
+          '3 ♦ en la mesa y tú sin ninguno: aviso suave (posible color)', suave.peligro && suave.peligro.texto);
+        okD(desc('Ac Kc', '2d 7d Jd 9s 3h').peligro.nivel === 'suave', 'En el river también se avisa (3 ♦ en la mesa)');
+        okD(desc('Ad Kc', '2d 7d Jd').peligro === null && desc('Ad Kc', '2d 7d Jd 9d').peligro === null,
+          'Con un ♦ tuyo no hay aviso: con 3 en la mesa tienes proyecto y con 4 tienes color');
+        okD(desc('Ac Kc', '2d 7h Js').peligro === null && desc('Ac Kc').peligro === null,
+          'Sin 3 del mismo palo en la mesa, o antes del flop: sin aviso');
+        const cinco = desc('Ac Kc', '2d 7d Jd 9d 3d');
+        okD(cinco.peligro && cinco.peligro.nivel === 'alto' && cinco.texto.endsWith('(todo de la mesa)'),
+          '5 ♦ en la mesa y tú sin ninguno: el color es de la mesa (aviso fuerte)', cinco.peligro && cinco.peligro.texto);
+        okD(textoMano(suave).endsWith(' · ⚠️ 3 ♦︎ en la mesa: posible color'), 'El aviso también sale en el texto de la pantalla', textoMano(suave));
       }
 
       // ---- Cantidades y teclado (teclado.js) ----

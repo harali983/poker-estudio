@@ -147,13 +147,19 @@ export function iniciarCalculadora() {
   };
 }
 
-/** Pinta la descripción de tu mano: la mano hecha y, debajo, los proyectos (si hay). */
+/** Pinta la descripción de tu mano: la mano hecha, los proyectos y el peligro de color (si hay). */
 export function pintarJugada(elemento, desc) {
   elemento.textContent = desc ? desc.texto : '';
   if (desc && desc.textoProyectos) {
     const p = document.createElement('span');
     p.className = 'proyecto';
     p.textContent = desc.textoProyectos;
+    elemento.appendChild(p);
+  }
+  if (desc && desc.peligro) {
+    const p = document.createElement('span');
+    p.className = 'peligro peligro-' + desc.peligro.nivel;
+    p.textContent = '⚠️ ' + desc.peligro.texto;
     elemento.appendChild(p);
   }
 }

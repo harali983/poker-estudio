@@ -10,9 +10,15 @@
 //
 // Los outs no se cuentan dos veces: en un proyecto de color + escalera abierta, las 2 cartas
 // que completan las dos cosas cuentan una vez (9 + 8 − 2 = 15 outs).
+//
+// Outs "sucios": una carta que te da escalera pero pone 5 cartas del mismo palo en la mesa
+// no es out (salvo que tú tengas color): la mesa hace color y cualquiera con ese palo te gana.
+//
+// Peligro de color (aviso): 4 de un palo en la mesa y tú sin ninguna → cualquier rival con
+// una de ese palo tiene color. 3 de un palo en la mesa y tú sin ninguna → posible color.
 
 import { evaluar, categoria, escaleraMasAlta, CATEGORIAS } from './evaluador.js';
-import { VALORES_TEXTO, valorDe, paloDe } from './cartas.js';
+import { VALORES_TEXTO, SIMBOLOS, valorDe, paloDe } from './cartas.js';
 
 const V = (v) => VALORES_TEXTO[v];
 const AS = 12;
@@ -39,7 +45,8 @@ function mascaraDeValores(cartas) {
  *   categoria (0–8, ver CATEGORIAS), nombre ('Pareja'…), texto ('Pareja de J (de la mesa) con A'),
  *   deLaMesa (true si juegas la mesa: tus cartas no cuentan),
  *   proyectos: [{ tipo: 'color' | 'escalera-abierta' | 'escalera-doble-interna' | 'escalera-interna', texto, outs }],
- *   outs (sin repetir), cartasOut, probabilidad (0–1, de ligar alguno hasta el river), textoProyectos
+ *   outs (sin repetir), cartasOut, probabilidad (0–1, de ligar alguno hasta el river), textoProyectos,
+ *   peligro: { nivel: 'alto' | 'suave', palo, texto } | null   (posible color de un rival)
  * }
  */
 export function describirMano(mias, mesa = []) {
@@ -52,7 +59,24 @@ export function describirMano(mias, mesa = []) {
   const d = desempates(puntuacion);
   const deLaMesa = mesa.length === 5 && evaluar(mesa) === puntuacion;
   const texto = deLaMesa ? textoBase(cat, d) + ' (todo de la mesa)' : textoHecha(cat, d, mias, mesa);
-  return { categoria: cat, nombre: CATEGORIAS[cat], texto, deLaMesa, ...proyectos(mias, mesa, cat) };
+  return { categoria: cat, nombre: CATEGORIAS[cat], texto, deLaMesa, ...proyectos(mias, mesa, cat),
+    peligro: peligroDeColor(mias, mesa) };
+}
+
+/**
+ * Peligro de color para ti: un palo con 3 o más cartas en la mesa del que no tienes ninguna.
+ * Con 4 o más, cualquier rival con una de ese palo tiene color ('alto'); con 3, posible color ('suave').
+ */
+export function peligroDeColor(mias, mesa) {
+  for (let p = 0; p < 4; p++) {
+    const n = mesa.filter((c) => paloDe(c) === p).length;
+    if (n < 3 || mias.some((c) => paloDe(c) === p)) continue;
+    const s = SIMBOLOS[p];
+    if (n >= 5) return { nivel: 'alto', palo: p, texto: `${n} ${s} en la mesa: el color es de la mesa y cualquier rival con un ${s} alto lo mejora` };
+    if (n === 4) return { nivel: 'alto', palo: p, texto: `4 ${s} en la mesa: cualquier rival con un ${s} tiene color` };
+    return { nivel: 'suave', palo: p, texto: `3 ${s} en la mesa: posible color` };
+  }
+  return null;
 }
 
 function describirPreflop(mias) {
@@ -61,7 +85,7 @@ function describirPreflop(mias) {
   const par = va === vb;
   const texto = par ? `Pareja de ${V(va)} en mano`
     : `${V(va)} y ${V(vb)} ${paloDe(a) === paloDe(b) ? 'del mismo palo' : 'de distinto palo'}`;
-  return { categoria: par ? 1 : 0, nombre: CATEGORIAS[par ? 1 : 0], texto, deLaMesa: false, ...sinProyectos() };
+  return { categoria: par ? 1 : 0, nombre: CATEGORIAS[par ? 1 : 0], texto, deLaMesa: false, ...sinProyectos(), peligro: null };
 }
 
 // Nombre de la jugada, sin decir de quién son las cartas
@@ -137,18 +161,23 @@ function proyectos(mias, mesa, cat) {
     }
   }
 
-  // Escalera: valores que la completan, y que no la completarían solo con la mesa
+  // Escalera: valores que la completan, y que no la completarían solo con la mesa.
+  // Una carta que pone 5 del mismo palo en la mesa no es out, salvo que te dé color a ti.
   if (cat < 4) {
     const mTodas = mascaraDeValores(todas);
     const mMesa = mascaraDeValores(mesa);
+    // (tu color: color o mejor con tus cartas, por encima de lo que hace la mesa sola)
+    const limpia = (c) => mesa.filter((m) => paloDe(m) === paloDe(c)).length + 1 < 5
+      || (categoria(evaluar([...todas, c])) >= 5 && evaluar([...todas, c]) > evaluar([...mesa, c]));
     const valores = [];
+    const cartas = [];
     for (let r = 0; r < 13; r++) {
       const alta = escaleraMasAlta(mTodas | (1 << r));
       if (alta < 0 || escaleraMasAlta(mMesa | (1 << r)) >= alta) continue;
-      if (desconocidas.some((c) => valorDe(c) === r)) valores.push(r);
+      const deEste = desconocidas.filter((c) => valorDe(c) === r && limpia(c));
+      if (deEste.length) { valores.push(r); cartas.push(...deEste); }
     }
     if (valores.length) {
-      const cartas = desconocidas.filter((c) => valores.includes(valorDe(c)));
       const tipo = valores.length === 1 ? 'escalera-interna'
         : (esAbierta(valores, mTodas) ? 'escalera-abierta' : 'escalera-doble-interna');
       const texto = { 'escalera-interna': 'Escalera interna', 'escalera-abierta': 'Escalera abierta',
@@ -188,5 +217,6 @@ function esAbierta(valores, mascara) {
 /** Texto corto para la pantalla: la mano hecha y, si hay, los proyectos. */
 export function textoMano(desc) {
   if (!desc) return '';
-  return desc.texto + (desc.textoProyectos ? ' · ' + desc.textoProyectos : '');
+  return desc.texto + (desc.textoProyectos ? ' · ' + desc.textoProyectos : '')
+    + (desc.peligro ? ' · ⚠️ ' + desc.peligro.texto : '');
 }
