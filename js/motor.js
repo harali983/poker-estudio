@@ -15,8 +15,14 @@
 // La app es un REGISTRO: si un evento no cuadra (no era su turno, subida menor que la
 // mínima…), el motor lo aplica igualmente y añade un aviso. Manda lo que pasó en la mesa.
 //
-// Pendiente para el paso 12: botes secundarios y la regla de la subida all-in incompleta
-// (que no reabre la acción). De momento, cualquier subida reabre la acción.
+// All-in (paso 12):
+//  - Cada uno pone como mucho las fichas que tiene; los botes secundarios se reparten en final.js.
+//  - Una subida all-in incompleta (menor que una subida completa) obliga a los demás a pagar o
+//    retirarse, pero NO reabre la acción para quien ya había hablado: solo puede volver a subir
+//    si, desde que habló, lo subido suma al menos una subida completa (también sumando varios
+//    all-in cortos). Quien aún no ha hablado en la calle siempre puede subir. Ver puedeSubir.
+//  - BB all-in corta: si la BB no tiene fichas para la ciega entera, los demás tienen que pagar
+//    igualmente la ciega grande entera (y la SB completar hasta ella).
 
 import { calcularPosiciones } from './posiciones.js';
 
@@ -100,7 +106,8 @@ export function posicionesDeMano(mano) {
  *   bote, apuestaMaxima (lo más alto puesto en esta calle), aPagar (lo que le falta al del turno),
  *   subidaMinima (el "hasta" mínimo para apostar o subir),
  *   mesa: [cartas], vivos: [asientos],
- *   jugadores: [{ asiento, posicion, puesto (en esta calle), total (en la mano), fichas, vivo, allin, haHablado, aPagar }],
+ *   jugadores: [{ asiento, posicion, puesto (en esta calle), total (en la mano), fichas, vivo, allin, haHablado, aPagar,
+ *                 puedeSubir (false si una subida all-in incompleta no le reabrió la acción) }],
  *   avisos: [{ evento, texto }]
  * }
  */
@@ -118,6 +125,8 @@ export function calcularEstado(mano, eventos = mano.eventos) {
       vivo: true,
       allin: false,
       haHablado: false,
+      hablo: false,        // ha hablado en esta calle (las ciegas no cuentan)
+      maximaAlHablar: 0,   // la apuesta más alta de la calle justo después de que hablara
     });
   }
 
@@ -137,6 +146,10 @@ export function calcularEstado(mano, eventos = mano.eventos) {
 
   const aPagarDe = (j) => Math.max(0, Math.min(e.apuestaMaxima - j.puesto, j.fichas ?? Infinity));
   const nombre = (asiento) => 'asiento ' + (asiento + 1);
+  // ¿Puede subir? Si aún no ha hablado en la calle, sí. Si ya habló, solo si desde entonces se ha
+  // subido al menos una subida completa (o él había pasado sin apuesta: cualquier apuesta abre).
+  const puedeSubirJ = (j) => !j.hablo || j.maximaAlHablar === 0
+    || e.apuestaMaxima - j.maximaAlHablar >= Math.max(e.incremento, bb);
 
   // Pone fichas hasta "hasta" en esta calle (o las que le queden, si no le llegan)
   function poner(j, hasta, i) {
@@ -168,6 +181,8 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     } else if (ev.tipo === 'ciega') {
       poner(j, ev.hasta, i);
       e.apuestaMaxima = Math.max(e.apuestaMaxima, j.puesto);
+      // BB all-in corta: lo que hay que pagar sigue siendo la ciega grande entera
+      if (ev.asiento === pos.bb) e.apuestaMaxima = Math.max(e.apuestaMaxima, bb);
     } else if (ev.tipo === 'accion') {
       aplicarAccion(j, ev, i);
     } else if (ev.tipo === 'mesa') {
@@ -183,6 +198,7 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     if (!j.vivo) e.avisos.push({ evento: i, texto: `El ${nombre(j.asiento)} ya se había retirado.` });
 
     const aPagar = aPagarDe(j);
+    const podiaSubir = puedeSubirJ(j);
     const maximaAntes = e.apuestaMaxima;
     const minimaAntes = maximaAntes + Math.max(e.incremento, bb);
 
@@ -216,7 +232,9 @@ export function calcularEstado(mano, eventos = mano.eventos) {
         poner(j, hasta, i);
         if (j.puesto > maximaAntes) {
           const subida = j.puesto - maximaAntes;
-          if (j.puesto < minimaAntes && !j.allin) {
+          if (!podiaSubir) {
+            e.avisos.push({ evento: i, texto: 'La subida all-in incompleta no reabría la acción: solo podía pagar o retirarse.' });
+          } else if (j.puesto < minimaAntes && !j.allin) {
             e.avisos.push({ evento: i, texto: `Subida menor que la mínima (hasta ${minimaAntes}).` });
           }
           if (subida >= e.incremento) e.incremento = subida;
@@ -232,6 +250,8 @@ export function calcularEstado(mano, eventos = mano.eventos) {
         e.avisos.push({ evento: i, texto: `Acción desconocida: ${ev.accion}.` });
     }
     j.haHablado = true;
+    j.hablo = true;
+    j.maximaAlHablar = e.apuestaMaxima;
     e.ultimoQueHablo = j.asiento;
   }
 
@@ -247,7 +267,7 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     }
     e.calle = ev.calle;
     e.mesa.push(...(ev.cartas || []));
-    for (const j of js.values()) { j.puesto = 0; j.haHablado = false; }
+    for (const j of js.values()) { j.puesto = 0; j.haHablado = false; j.hablo = false; j.maximaAlHablar = 0; }
     e.apuestaMaxima = 0;
     e.incremento = bb;
     e.ultimoQueHablo = null;
@@ -287,7 +307,7 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     Object.assign(e, { fase: 'accion', faltan: null, motivoFin: null, ganador: null });
   }
 
-  const jugadores = [...js.values()].map((j) => ({ ...j, aPagar: aPagarDe(j) }));
+  const jugadores = [...js.values()].map(({ hablo, maximaAlHablar, ...j }) => ({ ...j, aPagar: aPagarDe(j), puedeSubir: puedeSubirJ({ hablo, maximaAlHablar }) }));
   const delTurno = e.turno === null ? null : js.get(e.turno);
   return {
     calle: e.calle,
@@ -310,6 +330,7 @@ export function calcularEstado(mano, eventos = mano.eventos) {
 /**
  * Botones que tienen sentido para el jugador al que le toca (ver el plan, 2.3):
  * sin nada que pagar, Check y Apostar; con algo que pagar, Fold, Call y Subir; All-in siempre.
+ * Si una subida all-in incompleta no le reabre la acción, no puede subir: solo Fold o Call.
  */
 export function opciones(estado) {
   if (estado.fase !== 'accion') return null;
@@ -321,8 +342,8 @@ export function opciones(estado) {
     check: aPagar === 0,
     call: aPagar > 0,
     apostar: estado.apuestaMaxima === 0 && leQuedanMas,
-    subir: estado.apuestaMaxima > 0 && leQuedanMas,
-    allin: true,
+    subir: estado.apuestaMaxima > 0 && leQuedanMas && j.puedeSubir,
+    allin: j.puedeSubir || !leQuedanMas,
     aPagar,
     subidaMinima: estado.subidaMinima,
   };

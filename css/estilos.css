@@ -540,6 +540,11 @@ h2 {
 .fila-showdown { display: flex; align-items: center; gap: 8px; }
 .boton-ganador { flex: 1; min-width: 0; min-height: 44px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .boton-ganador[aria-pressed="true"] { border-color: var(--acento); background: #14361f; color: #c8f7d8; }
+/* Botes secundarios: "Bote secundario · 140 · lo juegan Ana, Luis → Ana 140" y, si hace falta, quién gana */
+.bote-showdown { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--borde); border-radius: 10px; }
+.bote-showdown p { flex-basis: 100%; margin: 0; font-size: 0.9rem; line-height: 1.3; color: var(--texto-suave); }
+.bote-showdown p.bote-pide { color: #f5c451; }
+.bote-showdown .boton-ganador { flex: 1 1 40%; }
 
 /* ===== Teclado de cantidades (hoja inferior) ===== */
 .hoja-cantidad { z-index: 20; }

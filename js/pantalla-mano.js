@@ -24,7 +24,7 @@ import { calcularPosiciones } from './posiciones.js';
 import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
 import { manoEnCurso, empezarMano, guardarMano, terminarMano } from './manos.js';
-import { calcularFinal, avisoBotes } from './final.js';
+import { calcularFinal, faltanGanadores, ganadoresPorBote } from './final.js';
 import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad, tamanoRapido } from './teclado.js';
@@ -312,7 +312,7 @@ export function iniciarMano() {
     const estado = calcularEstado(mano);
     if (estado.fase !== 'fin') return;
     const cierre = cierreActual();
-    if (estado.motivoFin === 'showdown' && !calcularFinal(mano, estado, cierre).ganadores.length) return;
+    if (estado.motivoFin === 'showdown' && faltanGanadores(calcularFinal(mano, estado, cierre))) return;
     ocupado = true;
     hojaCartas.cerrar();
     try {
@@ -439,8 +439,6 @@ export function iniciarMano() {
     const lista = $('mano-avisos');
     lista.innerHTML = '';
     const avisos = estado.avisos.filter((a) => a.evento === mano.eventos.length - 1).map((a) => a.texto);
-    const botes = avisoBotes(estado);
-    if (botes) avisos.push(botes);
     for (const aviso of avisos) {
       const li = document.createElement('li');
       li.className = 'aviso';
@@ -463,7 +461,7 @@ export function iniciarMano() {
     for (const id of BOTONES) $(id).disabled = false;
     // En el showdown, "Siguiente mano" espera a que se elija quién gana
     $('btn-siguiente').disabled = estado.fase === 'fin' && estado.motivoFin === 'showdown'
-      && !calcularFinal(mano, estado, cierreActual()).ganadores.length;
+      && faltanGanadores(calcularFinal(mano, estado, cierreActual()));
     $('btn-deshacer').hidden = false;
     $('btn-deshacer').disabled = !puedeDeshacer(mano.eventos);
     pintarCartas();
@@ -604,8 +602,10 @@ export function iniciarMano() {
     ].filter(Boolean).join(' · ');
     texto.textContent = r.texto;
     aviso.classList.toggle('destacado', r.destacar);
-    // All-in se anota con el teclado de Subir (o con Call, si no se puede subir)
-    const boton = r.consejo === 'allin' && $('btn-subir').hidden ? 'btn-call' : BOTON_DE_CONSEJO[r.consejo];
+    // All-in se anota con el teclado de Subir (o con Call, si no se puede subir: p. ej. si una
+    // subida all-in incompleta no te reabre la acción)
+    let boton = BOTON_DE_CONSEJO[r.consejo];
+    if ($(boton).hidden && ['allin', 'subir', 'apostar'].includes(r.consejo)) boton = 'btn-call';
     $(boton).classList.add('recomendado');
   }
 
@@ -709,13 +709,58 @@ export function iniciarMano() {
       filaJ.appendChild(cartas);
       cont.appendChild(filaJ);
     }
+    if (final.botes) pintarBotes(cont, estado, final, cierre);
+  }
+
+  // Botes secundarios: cada bote con lo que tiene y quién lo juega. El principal lo gana la mejor
+  // mano (lo marcado arriba); un secundario lo ganan los mismos si lo juegan. Si no (p. ej. ganó
+  // el all-in corto), se toca aquí quién gana ese bote.
+  function pintarBotes(cont, estado, final, cierre) {
+    const porBote = ganadoresPorBote(estado, cierre);
+    final.botes.forEach((b, k) => {
+      const caja = document.createElement('div');
+      caja.className = 'bote-showdown';
+      const p = document.createElement('p');
+      const nombreBote = k === 0 ? 'Bote principal' : final.botes.length === 2 ? 'Bote secundario' : 'Bote secundario ' + k;
+      const juegan = b.aptos.map(nombreEnMano).join(', ');
+      const gana = b.ganadores.length ? ' → ' + b.ganadores.map((g) => nombreEnMano(g.asiento) + ' ' + formatear(g.cantidad)).join(' · ') : '';
+      p.textContent = `${nombreBote} · ${formatear(b.cantidad)} · lo juegan ${juegan}${gana}`;
+      caja.appendChild(p);
+      const elegir = k > 0 && !porBote[k].heredado && b.aptos.length > 1;
+      if (elegir) {
+        const actuales = new Set(porBote[k].elegidos);
+        if (!actuales.size) {
+          const pide = document.createElement('p');
+          pide.className = 'bote-pide';
+          pide.textContent = '¿Quién gana este bote? (si empatan, varios)';
+          caja.appendChild(pide);
+        }
+        for (const asiento of b.aptos) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'boton boton-ganador';
+          const marcado = actuales.has(asiento);
+          btn.setAttribute('aria-pressed', String(marcado));
+          btn.textContent = (marcado ? '🏆 ' : '') + nombreEnMano(asiento);
+          btn.addEventListener('click', () => {
+            const nuevos = marcado ? [...actuales].filter((a) => a !== asiento) : [...actuales, asiento];
+            guardarCierre({ botes: { ...(cierre.botes || {}), [k]: nuevos } });
+          });
+          caja.appendChild(btn);
+        }
+      }
+      cont.appendChild(caja);
+    });
   }
 
   // Quién gana cuánto (antes de cerrar la mano ya se ve cómo quedará)
   function textoResultado(estado) {
     const final = calcularFinal(mano, estado, cierreActual());
-    if (!final.ganadores.length) {
-      return `Showdown · bote ${formatear(estado.bote)}. Toca quién gana (si empatan, varios).`;
+    if (!(cierreActual().ganadores || []).length && estado.motivoFin === 'showdown') {
+      return `Showdown · bote ${formatear(estado.bote)}. Toca quién ` + (final.botes ? 'tiene la mejor mano' : 'gana') + ' (si empatan, varios).';
+    }
+    if (faltanGanadores(final)) {
+      return `Showdown · bote ${formatear(estado.bote)}. Falta elegir quién gana un bote secundario.`;
     }
     let t;
     if (final.ganadores.length === 1) {
@@ -724,7 +769,7 @@ export function iniciarMano() {
         : `Gana ${nombreEnMano(g.asiento)}: se lleva ${formatear(g.cantidad)}.`;
       if (final.motivo === 'retirada') t = 'Los demás se retiran. ' + t;
     } else {
-      t = 'Bote repartido: ' + final.ganadores.map((g) => nombreEnMano(g.asiento) + ' ' + formatear(g.cantidad)).join(' · ') + '.';
+      t = (final.botes ? 'Botes: ' : 'Bote repartido: ') + final.ganadores.map((g) => nombreEnMano(g.asiento) + ' ' + formatear(g.cantidad)).join(' · ') + '.';
     }
     if (final.devuelto) {
       const d = final.devuelto;

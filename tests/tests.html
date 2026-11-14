@@ -66,7 +66,7 @@
       cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
     } from '../js/motor.js';
     import { cerrarMano } from '../js/manos.js';
-    import { calcularFinal, repartir, netos, unidadDeFichas, avisoBotes } from '../js/final.js';
+    import { calcularFinal, repartir, netos, unidadDeFichas, calcularBotes, faltanGanadores } from '../js/final.js';
     import { describirMano, textoMano } from '../js/describir.js';
     import { recomendar, potOdds, parteJusta, spr, destacarAviso, MARGEN_POT_ODDS, MARGEN_PARTE } from '../js/recomendacion.js';
     import {
@@ -466,6 +466,48 @@
       ok(mBBCorta.eventos[1].hasta === 1 && est(mBBCorta).jugadores[2].allin,
         'Si la BB solo tiene 1 ficha, pone 1 y queda all-in', JSON.stringify(mBBCorta.eventos[1]));
 
+      // BB all-in corta (paso 12): los demás pagan la ciega grande entera y la SB completa
+      const sBBc0 = est(mBBCorta);
+      ok(sBBc0.turno === 0 && sBBc0.aPagar === 2 && sBBc0.subidaMinima === 4 && eventoDeAccion(sBBc0, 'call').hasta === 2,
+        'BB all-in con 1 ficha (ciegas 1/2): el BTN paga 2, no 1; subida mínima a 4', resumen(sBBc0));
+      const sBBc1 = est(mBBCorta, ['0 call']);
+      ok(sBBc1.turno === 1 && sBBc1.aPagar === 1, 'BB all-in con 1 ficha: la SB tiene que completar hasta 2 (paga 1)', resumen(sBBc1));
+      const sBBc2 = est(mBBCorta, ['0 call', '1 call']);
+      ok(sBBc2.fase === 'cartas' && sBBc2.bote === 5 && sBBc2.avisos.length === 0,
+        'BB all-in con 1 ficha: BTN y SB pagan 2 y se cierra la calle (bote 5, sin avisos)', resumen(sBBc2));
+      const sBBcFold = est(mBBCorta, ['0 fold', '1 fold']);
+      ok(sBBcFold.fase === 'fin' && sBBcFold.ganador === 2, 'BB all-in con 1 ficha: si todos se retiran, gana la BB', resumen(sBBcFold));
+
+      // Subida all-in incompleta (paso 12): no reabre la acción a quien ya había hablado
+      const mInc = nueva(3, 0, { fichas: [200, 200, 35] });
+      const sInc = est(mInc, ['0 subida 20', '1 call', '2 allin']);
+      const oInc = opciones(sInc);
+      ok(sInc.turno === 0 && sInc.aPagar === 15 && oInc.call && oInc.fold && !oInc.subir && !oInc.allin,
+        'BTN sube a 20, SB paga, BB all-in a 35 (sube 15 < 18): el BTN solo puede pagar o retirarse', resumen(sInc) + ' · ' + JSON.stringify(oInc));
+      const sIncSube = est(mInc, ['0 subida 20', '1 call', '2 allin', '0 subida 60']);
+      ok(sIncSube.avisos.some((a) => a.texto.includes('no reabría')) && sIncSube.apuestaMaxima === 60,
+        'Si aun así sube: aviso, pero se anota', sIncSube.avisos.map((a) => a.texto).join(' / '));
+      const sIncCierra = est(mInc, ['0 subida 20', '1 call', '2 allin', '0 call', '1 call']);
+      ok(sIncCierra.fase === 'cartas' && sIncCierra.bote === 105 && sIncCierra.avisos.length === 0,
+        'Tras la subida incompleta, BTN y SB pagan y se cierra la calle', resumen(sIncCierra));
+      const sCompleta = est(nueva(3, 0, { fichas: [200, 200, 40] }), ['0 subida 20', '1 call', '2 allin']);
+      ok(opciones(sCompleta).subir && sCompleta.subidaMinima === 60,
+        'Si el all-in de la BB es una subida completa (a 40: sube 20 ≥ 18), el BTN puede volver a subir', resumen(sCompleta));
+      const mNoHablo = nueva(4, 0, { fichas: [35, 200, 200, 200] });
+      const sNoHablo = est(mNoHablo, ['3 subida 20', '0 allin']);
+      ok(sNoHablo.turno === 1 && opciones(sNoHablo).subir && opciones(est(mNoHablo, ['3 subida 20', '0 allin', '1 call'])).subir,
+        'Subida all-in incompleta: la SB y la BB, que aún no habían hablado, sí pueden subir', resumen(sNoHablo));
+      const sVuelveUTG = est(mNoHablo, ['3 subida 20', '0 allin', '1 call', '2 call']);
+      ok(sVuelveUTG.turno === 3 && !opciones(sVuelveUTG).subir && opciones(sVuelveUTG).call,
+        'Subida all-in incompleta: al UTG (que ya había subido) solo le queda pagar o retirarse', resumen(sVuelveUTG));
+      const mSuma = nueva(4, 0, { fichas: [30, 40, 200, 200] });
+      const sSuma1 = est(mSuma, ['3 subida 20', '0 allin', '1 allin', '2 call']);
+      ok(sSuma1.turno === 3 && opciones(sSuma1).subir && sSuma1.aPagar === 20,
+        'Dos all-in incompletos seguidos (30 y 40) suman una subida completa (20 ≥ 18): el UTG puede volver a subir', resumen(sSuma1));
+      const mPost = nueva(3, 0, { fichas: [200, 200, 200] });
+      const sPostCheck = est(mPost, ['0 call', '1 call', '2 check', 'flop', '1 check', '2 apuesta 1', '0 call']);
+      ok(sPostCheck.turno === 1 && opciones(sPostCheck).subir, 'Después de pasar, cualquier apuesta (aunque sea pequeña) abre la acción', resumen(sPostCheck));
+
       // Deshacer
       const conTodo = jugar(m6, [...limp, '2 check', 'flop', '1 check']);
       const sinUltima = { ...conTodo, eventos: deshacer(conTodo.eventos) };
@@ -596,15 +638,59 @@
         const sHu2 = calcularEstado(mHu);
         const cHu = cerrarMano(mHu, pHu, sHu2, { ganadores: [0] });
         okF(ver(cHu.mano.final.devuelto) === '{"asiento":1,"cantidad":30}' && cHu.partida.asientos.map((a) => a.fichas).join(',') === '100,30'
-          && avisoBotes(sHu2) === null,
-          'All-in de 80 que el otro paga con 50: se devuelven 30; gana el corto → 100 y 30 (sin aviso)', ver(cHu.mano.final));
+          && calcularBotes(sHu2).length === 1 && !cHu.mano.final.botes,
+          'All-in de 80 que el otro paga con 50: se devuelven 30; gana el corto → 100 y 30 (un solo bote)', ver(cHu.mano.final));
         const cHu2 = cerrarMano(mHu, pHu, sHu2, { ganadores: [1] });
         okF(cHu2.partida.asientos[0].fichas === 0 && cHu2.partida.asientos[0].juega === false && cHu2.partida.asientos[1].fichas === 130,
           'El que se queda sin fichas deja de jugar las próximas manos', ver(cHu2.partida.asientos));
         const mLado = jugar(crearMano(partidaDe(3, 0, { fichas: [100, 100, 30] }), { id: 'ml', numero: 1, fecha: 'x' }),
           ['0 allin', '1 call', '2 call', ...hastaShowdown]);
-        okF(avisoBotes(calcularEstado(mLado)) !== null && avisoBotes(calcularEstado(m3)) === null,
-          'All-in de 30 contra dos de 100: aviso de que el reparto puede no ser exacto (botes secundarios)', avisoBotes(calcularEstado(mLado)));
+        okF(ver(calcularBotes(calcularEstado(mLado))) === '[{"cantidad":90,"aptos":[0,1,2]},{"cantidad":140,"aptos":[0,1]}]'
+          && calcularBotes(s3).length === 1,
+          'All-in de 30 contra dos de 100: bote principal de 90 (los 3) y secundario de 140 (los de 100)', ver(calcularBotes(calcularEstado(mLado))));
+
+        // ---- Botes secundarios (paso 12): 4 jugadores, 3 all-in con fichas distintas ----
+        // BTN 100, SB 60, BB 30, UTG 200. El UTG va all-in y todos pagan con lo que tienen.
+        const pBotes = { ...partidaDe(4, 0, { fichas: [100, 60, 30, 200] }), manosJugadas: 0 };
+        const mBotes = jugar(crearMano(pBotes, { id: 'mb', numero: 1, fecha: 'x' }), ['3 allin', '0 call', '1 call', '2 call', ...hastaShowdown]);
+        const sBotes = calcularEstado(mBotes);
+        okF(sBotes.motivoFin === 'showdown' && sBotes.bote === 390
+          && ver(calcularBotes(sBotes)) === '[{"cantidad":120,"aptos":[0,1,2,3]},{"cantidad":90,"aptos":[0,1,3]},{"cantidad":80,"aptos":[0,3]}]',
+          'Botes: principal 120 (los 4), secundario 90 (todos menos la BB) y otro de 80 (BTN y UTG); al UTG se le devuelven 100',
+          ver(calcularBotes(sBotes)) + ' · ' + ver(calcularFinal(mBotes, sBotes, {}).devuelto));
+        const fBB = calcularFinal(mBotes, sBotes, { ganadores: [2] });
+        okF(faltanGanadores(fBB) && fBB.botes[0].ganadores[0].cantidad === 120 && !fBB.botes[1].ganadores.length && !fBB.ganadores.length,
+          'Gana la BB (la más corta): se lleva el principal (120) y falta elegir quién gana el secundario', ver(fBB.botes));
+        const cierreBotes = { ganadores: [2], botes: { 1: [1], 2: [3] } };
+        const fTodos = calcularFinal(mBotes, sBotes, cierreBotes);
+        okF(!faltanGanadores(fTodos)
+          && ver(fTodos.ganadores) === '[{"asiento":1,"cantidad":90},{"asiento":2,"cantidad":120},{"asiento":3,"cantidad":80}]'
+          && netosDe(mBotes, fTodos) === '0:-100 1:30 2:90 3:-20',
+          'BB gana el principal, SB el secundario y UTG el último: 120, 90 y 80; netos −100, +30, +90 y −20',
+          ver(fTodos.ganadores) + ' · ' + netosDe(mBotes, fTodos));
+        const cUTG = cerrarMano(mBotes, pBotes, sBotes, { ganadores: [3] });
+        okF(ver(cUTG.mano.final.ganadores) === '[{"asiento":3,"cantidad":290}]' && cUTG.mano.final.botes.every((b) => b.ganadores[0].asiento === 3)
+          && cUTG.partida.asientos.map((a) => a.fichas).join(',') === '0,0,0,390',
+          'Gana el UTG (el que más tiene): se lleva todos los botes (290) y recupera 100 → 390; los demás, a 0',
+          ver(cUTG.mano.final.ganadores) + ' · ' + cUTG.partida.asientos.map((a) => a.fichas).join(','));
+        const fEmpate = calcularFinal(mBotes, sBotes, { ganadores: [2, 3] });
+        okF(ver(fEmpate.ganadores) === '[{"asiento":2,"cantidad":60},{"asiento":3,"cantidad":230}]',
+          'Empatan la BB y el UTG: el principal a medias (60 y 60) y los secundarios para el UTG (de los dos, solo los juega él)', ver(fEmpate.ganadores));
+        const fBTN = calcularFinal(mBotes, sBotes, { ganadores: [0] });
+        okF(!faltanGanadores(fBTN) && ver(fBTN.ganadores) === '[{"asiento":0,"cantidad":290}]',
+          'Gana el BTN (juega todos los botes): se lleva los tres', ver(fBTN.ganadores));
+        const fSB = calcularFinal(mBotes, sBotes, { ganadores: [1], botes: { 2: [0] } });
+        okF(ver(fSB.ganadores) === '[{"asiento":1,"cantidad":210},{"asiento":0,"cantidad":80}]',
+          'Gana la SB: principal y secundario (210); el último bote se elige aparte (BTN, 80)', ver(fSB.ganadores));
+
+        // BB all-in con 1 ficha: los demás pagan 2; hay un bote secundario de 2 entre BTN y SB
+        const mBBc = jugar(crearMano(partidaDe(3, 0, { fichas: [100, 100, 1] }), { id: 'mc', numero: 1, fecha: 'x' }),
+          ['0 call', '1 call', ...hastaShowdown.flatMap((c) => [c, '1 check', '0 check'])]);
+        const sBBc = calcularEstado(mBBc);
+        const fBBc = calcularFinal(mBBc, sBBc, { ganadores: [2], botes: { 1: [0] } });
+        okF(sBBc.bote === 5 && ver(calcularBotes(sBBc)) === '[{"cantidad":3,"aptos":[0,1,2]},{"cantidad":2,"aptos":[0,1]}]'
+          && ver(fBBc.ganadores) === '[{"asiento":2,"cantidad":3},{"asiento":0,"cantidad":2}]',
+          'BB all-in con 1 ficha: bote principal de 3 para la BB y secundario de 2 (BTN y SB) para el BTN', ver(calcularBotes(sBBc)) + ' · ' + ver(fBBc.ganadores));
         okF(cerrarMano(m3, partidaDe(3, 0), s3, { ganadores: [0] }).partida.asientos.every((a) => a.fichas === null),
           'Sin fichas: la partida no cambia las fichas');
 
