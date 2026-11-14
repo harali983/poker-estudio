@@ -103,6 +103,12 @@ function textoBase(cat, d) {
   }
 }
 
+/** Nombre corto de una jugada a partir de su puntuación (evaluar): "pareja de Q", "full de 7 con K". */
+export function nombreJugada(puntuacion) {
+  const t = textoBase(categoria(puntuacion), desempates(puntuacion));
+  return t.charAt(0).toLowerCase() + t.slice(1);
+}
+
 // La jugada, diciendo qué parte es tuya y qué parte de la mesa
 function textoHecha(cat, d, mias, mesa) {
   const enMano = (v) => mias.filter((c) => valorDe(c) === v).length;

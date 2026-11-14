@@ -24,7 +24,9 @@ import { calcularPosiciones } from './posiciones.js';
 import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
 import { manoEnCurso, empezarMano, guardarMano, terminarMano, pedirMisCartas } from './manos.js';
-import { calcularFinal, faltanGanadores, ganadoresPorBote } from './final.js';
+import {
+  calcularFinal, faltanGanadores, ganadoresPorBote, cierreEfectivo, decidirShowdown, puedeHacerMuck, motivoShowdown,
+} from './final.js';
 import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad, tamanoRapido } from './teclado.js';
@@ -165,12 +167,16 @@ export function iniciarMano() {
     const m = cierreActual().mostradas.find((x) => x.asiento === asiento);
     return m ? m.cartas : [];
   }
+  // Al cambiar cartas (tuyas o de la mesa) en el showdown, se vuelve a decidir con las cartas
+  function sinManual(m) {
+    return m.cierre && m.cierre.manual ? { ...m, cierre: { ...m.cierre, manual: false } } : m;
+  }
   function guardarCierre(cambios) {
     guardarCartas({ ...mano, cierre: { ...cierreActual(), ...cambios } });
   }
   function ponerMostradas(asiento, cartas) {
     const otras = cierreActual().mostradas.filter((x) => x.asiento !== asiento);
-    guardarCierre({ mostradas: cartas.length ? [...otras, { asiento, cartas }] : otras });
+    guardarCierre({ mostradas: cartas.length ? [...otras, { asiento, cartas }] : otras, manual: false });
   }
 
   function abrirCalle(calle, i) {
@@ -253,7 +259,7 @@ export function iniciarMano() {
     e.cartas[e.indice] = c;
     if (e.tipo === 'mias') {
       // Tus cartas se guardan una a una (no son una acción: Deshacer no las quita)
-      guardarCartas({ ...mano, misCartas: e.cartas.filter((x) => x !== undefined) });
+      guardarCartas(sinManual({ ...mano, misCartas: e.cartas.filter((x) => x !== undefined) }));
       if (e.soloUna || e.cartas.length >= 2) { hojaCartas.cerrar(); return; }
       e.indice++;
       hojaCartas.actualizar(opcionesHoja());
@@ -279,7 +285,7 @@ export function iniciarMano() {
       : cambiarCartasDeMesa(mano.eventos, e.calle, e.cartas);
     hojaCartas.cerrar();
     if (e.nueva) cambiarEventos(eventos);
-    else guardarCartas({ ...mano, eventos });
+    else guardarCartas(sinManual({ ...mano, eventos }));
   }
 
   function calleSinCartas() {
@@ -290,7 +296,7 @@ export function iniciarMano() {
 
   function quitarMias() {
     hojaCartas.cerrar();
-    guardarCartas({ ...mano, misCartas: [] });
+    guardarCartas(sinManual({ ...mano, misCartas: [] }));
   }
 
   // Guarda un cambio de cartas (no es una acción nueva) y lo pinta al terminar.
@@ -678,8 +684,9 @@ export function iniciarMano() {
     }
   }
 
-  // Showdown: una fila por jugador que llega. Se toca el nombre para marcar quién gana
-  // (uno o varios: el bote se reparte) y los huecos para anotar las cartas que mostró.
+  // Showdown: una fila por jugador que llega. Si se conocen todas las cartas, el ganador se
+  // decide solo (con el motivo). Se toca el nombre para marcar quién gana a mano (uno o varios:
+  // el bote se reparte), los huecos para anotar las cartas que mostró y "Muck" si las tira.
   function pintarShowdown(estado) {
     const cont = $('showdown');
     cont.innerHTML = '';
@@ -687,25 +694,61 @@ export function iniciarMano() {
     cont.hidden = !visible;
     if (!visible) return;
     const cierre = cierreActual();
-    const ganan = new Set(cierre.ganadores);
+    const efectivo = cierreEfectivo(mano, estado, cierre);
+    const ganan = new Set(efectivo.ganadores);
+    const muck = new Set(cierre.muck || []);
     const final = calcularFinal(mano, estado, cierre);
     const cobra = new Map(final.ganadores.map((g) => [g.asiento, g.cantidad]));
+    // Elegir a mano parte de lo que se ve (lo decidido con las cartas, si lo hay)
+    const elegirAMano = (cambios) => guardarCierre({
+      ganadores: efectivo.ganadores || [], botes: efectivo.botes || {}, manual: true, ...cambios,
+    });
+
+    pintarMotivo(cont, estado, cierre);
+
     for (const asiento of estado.vivos) {
       const filaJ = document.createElement('div');
       filaJ.className = 'fila-showdown';
+      const tira = muck.has(asiento);
+      filaJ.classList.toggle('muck', tira);
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'boton boton-ganador';
-      const gana = ganan.has(asiento);
+      const gana = ganan.has(asiento) && !tira;
       b.setAttribute('aria-pressed', String(gana));
+      b.disabled = tira;
       const pos = mano.jugadores.find((j) => j.asiento === asiento).posicion;
       b.textContent = (gana ? '🏆 ' : '') + nombreEnMano(asiento) + ' (' + pos + ')'
         + (cobra.has(asiento) ? ' · ' + formatear(cobra.get(asiento)) : '');
       b.addEventListener('click', () => {
-        const nuevos = gana ? cierre.ganadores.filter((a) => a !== asiento) : [...cierre.ganadores, asiento];
-        guardarCierre({ ganadores: nuevos });
+        const actuales = efectivo.ganadores || [];
+        elegirAMano({ ganadores: gana ? actuales.filter((a) => a !== asiento) : [...actuales, asiento] });
       });
       filaJ.appendChild(b);
+
+      // Muck: el rival tira sus cartas sin enseñarlas (renuncia al bote). Se deshace tocando otra vez.
+      if (!esYo(asiento)) {
+        const m = document.createElement('button');
+        m.type = 'button';
+        m.className = 'boton boton-muck';
+        m.textContent = 'Muck';
+        m.setAttribute('aria-pressed', String(tira));
+        m.setAttribute('aria-label', (tira ? 'Deshacer muck de ' : 'Muck: ') + nombreEnMano(asiento));
+        m.disabled = !tira && !puedeHacerMuck(estado, cierre, asiento);
+        m.addEventListener('click', () => {
+          const nuevos = tira ? [...muck].filter((a) => a !== asiento) : [...muck, asiento];
+          guardarCierre({ muck: nuevos, manual: false });
+        });
+        filaJ.appendChild(m);
+      }
+      if (tira) {
+        const t = document.createElement('span');
+        t.className = 'texto-muck';
+        t.textContent = 'sin enseñar';
+        filaJ.appendChild(t);
+        cont.appendChild(filaJ);
+        continue;
+      }
 
       const cartas = document.createElement('div');
       cartas.className = 'cartas-mini';
@@ -721,13 +764,34 @@ export function iniciarMano() {
       filaJ.appendChild(cartas);
       cont.appendChild(filaJ);
     }
-    if (final.botes) pintarBotes(cont, estado, final, cierre);
+    if (final.botes) pintarBotes(cont, estado, final, efectivo, elegirAMano);
+  }
+
+  // Motivo del ganador decidido con las cartas ("Gana Tú: pareja de Q · Ana: pareja de 7").
+  // Si se eligió a mano, se dice y se puede volver a lo que dicen las cartas.
+  function pintarMotivo(cont, estado, cierre) {
+    const decision = decidirShowdown(mano, estado, cierre);
+    if (!decision) return;
+    const p = document.createElement('p');
+    p.className = 'motivo-showdown';
+    if (!cierre.manual) {
+      p.textContent = motivoShowdown(decision, estado, cierre, nombreEnMano);
+    } else {
+      p.textContent = 'Elegido a mano.';
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'boton';
+      b.textContent = 'Según las cartas';
+      b.addEventListener('click', () => guardarCierre({ manual: false }));
+      p.appendChild(b);
+    }
+    cont.appendChild(p);
   }
 
   // Botes secundarios: cada bote con lo que tiene y quién lo juega. El principal lo gana la mejor
   // mano (lo marcado arriba); un secundario lo ganan los mismos si lo juegan. Si no (p. ej. ganó
   // el all-in corto), se toca aquí quién gana ese bote.
-  function pintarBotes(cont, estado, final, cierre) {
+  function pintarBotes(cont, estado, final, cierre, elegirAMano) {
     const porBote = ganadoresPorBote(estado, cierre);
     final.botes.forEach((b, k) => {
       const caja = document.createElement('div');
@@ -756,7 +820,7 @@ export function iniciarMano() {
           btn.textContent = (marcado ? '🏆 ' : '') + nombreEnMano(asiento);
           btn.addEventListener('click', () => {
             const nuevos = marcado ? [...actuales].filter((a) => a !== asiento) : [...actuales, asiento];
-            guardarCierre({ botes: { ...(cierre.botes || {}), [k]: nuevos } });
+            elegirAMano({ botes: { ...(cierre.botes || {}), [k]: nuevos } });
           });
           caja.appendChild(btn);
         }
@@ -768,7 +832,8 @@ export function iniciarMano() {
   // Quién gana cuánto (antes de cerrar la mano ya se ve cómo quedará)
   function textoResultado(estado) {
     const final = calcularFinal(mano, estado, cierreActual());
-    if (!(cierreActual().ganadores || []).length && estado.motivoFin === 'showdown') {
+    const efectivo = estado.motivoFin === 'showdown' ? cierreEfectivo(mano, estado, cierreActual()) : {};
+    if (estado.motivoFin === 'showdown' && !final.ganadores.length && !(efectivo.ganadores || []).length) {
       return `Showdown · bote ${formatear(estado.bote)}. Toca quién ` + (final.botes ? 'tiene la mejor mano' : 'gana') + ' (si empatan, varios).';
     }
     if (faltanGanadores(final)) {

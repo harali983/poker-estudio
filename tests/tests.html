@@ -66,8 +66,11 @@
       cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
     } from '../js/motor.js';
     import { cerrarMano, pedirMisCartas } from '../js/manos.js';
-    import { calcularFinal, repartir, netos, unidadDeFichas, calcularBotes, faltanGanadores } from '../js/final.js';
-    import { describirMano, textoMano } from '../js/describir.js';
+    import {
+      calcularFinal, repartir, netos, unidadDeFichas, calcularBotes, faltanGanadores,
+      decidirShowdown, puedeHacerMuck, motivoShowdown,
+    } from '../js/final.js';
+    import { describirMano, textoMano, nombreJugada } from '../js/describir.js';
     import { recomendar, potOdds, parteJusta, spr, destacarAviso, MARGEN_POT_ODDS, MARGEN_PARTE } from '../js/recomendacion.js';
     import {
       clase, leerRango, numCombos, combosDe, combosDeRango, contarCombos, porcentaje, top, CLASES, ORDEN, TODAS,
@@ -708,6 +711,99 @@
         const fMostr = calcularFinal(m3Cartas, s3, { ganadores: [2], mostradas: [{ asiento: 2, cartas: textoACartas('Kc Kd') }, { asiento: 1, cartas: textoACartas('2c 3c') }] });
         okF(ver(fMostr.mostradas.map((m) => m.asiento)) === '[2,0]',
           'Cartas mostradas: las del que llega al showdown y las tuyas; las de un retirado no', ver(fMostr.mostradas));
+
+        // ---- Showdown automático y muck (v0.3.2) ----
+        // Mesa real (los tests de arriba usan cartas fijas): flop, turn y river de un texto
+        const ponerMesa = (m, t) => {
+          const c = textoACartas(t);
+          let ev = cambiarCartasDeMesa(m.eventos, 'flop', c.slice(0, 3));
+          ev = cambiarCartasDeMesa(ev, 'turn', [c[3]]);
+          ev = cambiarCartasDeMesa(ev, 'river', [c[4]]);
+          return { ...m, eventos: ev };
+        };
+        const muestra = (asiento, t) => ({ asiento, cartas: textoACartas(t) });
+        const nombre = (a) => ['Tú', 'Luis', 'Ana', 'Eva'][a];
+        okF(nombreJugada(evaluar(textoACartas('Ah Ad Kc 7d 2s'))) === 'pareja de A'
+          && nombreJugada(evaluar(textoACartas('7h 7d 7c Kd Ks'))) === 'full de 7 con K',
+          'Nombre corto de la jugada: "pareja de A", "full de 7 con K"');
+
+        // Un ganador: tú (BTN) con pareja de Q contra Ana (BB) con pareja de 7; Luis se retiró
+        const mA = { ...ponerMesa(m3, 'Qs 7c 2s 9h 4d'), misCartas: textoACartas('Qh 3c') };
+        const cA = { mostradas: [muestra(2, '7d 8c')] };
+        const fA = calcularFinal(mA, s3, cA);
+        okF(ver(fA.ganadores) === '[{"asiento":0,"cantidad":5}]'
+          && motivoShowdown(decidirShowdown(mA, s3, cA), s3, cA, nombre) === 'Gana Tú: pareja de Q · Ana: pareja de 7',
+          'Showdown automático: con todas las cartas y la mesa completa gana la mejor mano (tú, 5) y se explica',
+          ver(fA.ganadores) + ' · ' + motivoShowdown(decidirShowdown(mA, s3, cA), s3, cA, nombre));
+
+        // Empate: los dos con pareja de Q y los mismos acompañantes → bote repartido
+        const cEmp = { mostradas: [muestra(2, 'Qd 3d')] };
+        const fEmp = calcularFinal(mA, s3, cEmp);
+        okF(ver(fEmp.ganadores) === '[{"asiento":2,"cantidad":3},{"asiento":0,"cantidad":2}]'
+          && motivoShowdown(decidirShowdown(mA, s3, cEmp), s3, cEmp, nombre) === 'Empatan Tú y Ana: pareja de Q',
+          'Showdown automático con empate: bote de 5 repartido (3 a la BB por la ficha sobrante y 2 a ti)',
+          ver(fEmp.ganadores) + ' · ' + motivoShowdown(decidirShowdown(mA, s3, cEmp), s3, cEmp, nombre));
+
+        // Se puede cambiar a mano
+        okF(ver(calcularFinal(mA, s3, { ...cA, manual: true, ganadores: [2] }).ganadores) === '[{"asiento":2,"cantidad":5}]',
+          'Elegido a mano (manual): vale lo elegido, aunque las cartas digan otra cosa');
+
+        // Cartas que faltan: sin las de Ana, sin tus cartas o con la mesa incompleta → se elige a mano
+        const mSinRiver = { ...m3, misCartas: textoACartas('Qh 3c'),
+          eventos: cambiarCartasDeMesa(ponerMesa(m3, 'Qs 7c 2s 9h 4d').eventos, 'river', []) };
+        okF(decidirShowdown(mA, s3, {}) === null && calcularFinal(mA, s3, {}).ganadores.length === 0
+          && decidirShowdown({ ...mA, misCartas: [] }, s3, cA) === null
+          && decidirShowdown(mSinRiver, s3, cA) === null
+          && ver(calcularFinal(mA, s3, { ganadores: [2] }).ganadores) === '[{"asiento":2,"cantidad":5}]',
+          'Faltan cartas (de un rival, las tuyas o el river "sin cartas"): no se decide solo; se elige a mano como antes');
+
+        // Botes secundarios con ganadores distintos (BTN 100 = tú, SB 60, BB 30, UTG 200):
+        // la BB con trío gana el principal, la SB con AA el secundario y el UTG con KK el último
+        const mBA = { ...ponerMesa(mBotes, 'Kd 7c 2s 9h 4h'), misCartas: textoACartas('3d 6s') };
+        const cBA = { mostradas: [muestra(1, 'Ah Ad'), muestra(2, '2d 2c'), muestra(3, 'Kc 5c')] };
+        const fBA = calcularFinal(mBA, sBotes, cBA);
+        const motBA = motivoShowdown(decidirShowdown(mBA, sBotes, cBA), sBotes, cBA, nombre);
+        okF(!faltanGanadores(fBA)
+          && ver(fBA.ganadores) === '[{"asiento":1,"cantidad":90},{"asiento":2,"cantidad":120},{"asiento":3,"cantidad":80}]'
+          && netosDe(mBA, fBA) === '0:-100 1:30 2:90 3:-20'
+          && motBA === 'Bote principal: gana Ana: trío de 2 · Secundario 1: gana Luis: pareja de A · Secundario 2: gana Eva: pareja de K · Tú: carta alta, K',
+          'Botes secundarios automáticos: BB (trío) 120, SB (AA) 90 y UTG (KK) 80; netos −100, +30, +90 y −20',
+          ver(fBA.ganadores) + ' · ' + motBA);
+
+        // Muck del perdedor: 3 llegan; Eva (UTG) tira sus cartas → se decide entre tú y Ana
+        const m4A = { ...ponerMesa(m4, 'Qs 7c 2s 9h 4d'), misCartas: textoACartas('Qh 3c') };
+        const s4 = calcularEstado(m4A);
+        const cMuck = { mostradas: [muestra(2, '7d 8c')], muck: [3] };
+        const fMuck = calcularFinal(m4A, s4, cMuck);
+        okF(decidirShowdown(m4A, s4, { mostradas: cMuck.mostradas }) === null
+          && ver(fMuck.ganadores) === '[{"asiento":0,"cantidad":7}]' && ver(fMuck.muck) === '[3]'
+          && motivoShowdown(decidirShowdown(m4A, s4, cMuck), s4, cMuck, nombre) === 'Gana Tú: pareja de Q · Ana: pareja de 7 · Eva: muck',
+          'Muck del perdedor: sin sus cartas no se podía decidir; con su muck gana la mejor de las demás (tú, 7)',
+          ver(fMuck) + ' · ' + motivoShowdown(decidirShowdown(m4A, s4, cMuck), s4, cMuck, nombre));
+        const pM = cerrarMano(m4A, partidaDe(4, 0), s4, { ...cMuck, mostradas: [...cMuck.mostradas, muestra(3, 'Ac Ah')] });
+        const eva = pM.participaciones.find((x) => x.jugadorId === 'j3');
+        okF(eva.llegoAShowdown && !eva.ganoShowdown && eva.mostro === null && !pM.mano.final.mostradas.some((m) => m.asiento === 3),
+          'Participaciones del muck: llegó al showdown, no ganó y no mostró (aunque se hubieran anotado sus cartas)', ver(eva));
+
+        // Todos menos uno hacen muck: gana el que queda aunque no enseñe (ni tus cartas hacen falta)
+        const cTodos = { muck: [2, 3] };
+        const fTodosM = calcularFinal({ ...m4A, misCartas: [] }, s4, cTodos);
+        okF(ver(fTodosM.ganadores) === '[{"asiento":0,"cantidad":7}]' && !faltanGanadores(fTodosM)
+          && motivoShowdown(decidirShowdown({ ...m4A, misCartas: [] }, s4, cTodos), s4, cTodos, nombre) === 'Gana Tú · Ana: muck · Eva: muck',
+          'Todos menos uno hacen muck: gana el que queda (7) sin enseñar', ver(fTodosM));
+        okF(puedeHacerMuck(s4, { muck: [3] }, 2) && !puedeHacerMuck(s4, { muck: [2, 3] }, 0),
+          'No se puede hacer muck si el bote se quedaría sin nadie que lo gane');
+
+        // Muck con botes secundarios: la SB (AA) tira sus cartas → el principal para la BB y
+        // los dos secundarios para el UTG (KK gana a tu carta alta)
+        const cBM = { ...cBA, muck: [1] };
+        const fBM = calcularFinal(mBA, sBotes, cBM);
+        okF(ver(fBM.ganadores) === '[{"asiento":2,"cantidad":120},{"asiento":3,"cantidad":170}]'
+          && netosDe(mBA, fBM) === '0:-100 1:-60 2:90 3:70'
+          && ver(fBM.botes.map((b) => b.aptos)) === '[[0,2,3],[0,3],[0,3]]'
+          && !fBM.mostradas.some((m) => m.asiento === 1),
+          'Muck con botes secundarios: la SB queda fuera; BB 120, UTG 90 + 80; netos −100, −60, +90 y +70',
+          ver(fBM.ganadores) + ' · ' + netosDe(mBA, fBM));
 
         // Participaciones de una mano de ejemplo (6 jugadores; tú en el botón):
         // UTG sube a 6, MP paga, CO fold, tú resubes a 20, ciegas fold, UTG fold, MP paga.
