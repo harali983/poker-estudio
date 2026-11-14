@@ -38,6 +38,10 @@
   <ul id="lista-describir"></ul>
   <h2>Recomendación y SPR (recomendacion.js)</h2>
   <ul id="lista-recomendacion"></ul>
+  <h2>Rangos (rangos.js)</h2>
+  <ul id="lista-rangos"></ul>
+  <h2>Antes del flop: tablas por posición (preflop.js)</h2>
+  <ul id="lista-preflop"></ul>
   <h2>Cantidades y teclado</h2>
   <ul id="lista-teclado"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
@@ -65,6 +69,12 @@
     import { calcularFinal, repartir, netos, unidadDeFichas, avisoBotes } from '../js/final.js';
     import { describirMano, textoMano } from '../js/describir.js';
     import { recomendar, potOdds, parteJusta, spr, destacarAviso, MARGEN_POT_ODDS, MARGEN_PARTE } from '../js/recomendacion.js';
+    import {
+      clase, leerRango, numCombos, combosDe, combosDeRango, contarCombos, porcentaje, top, CLASES, ORDEN, TODAS,
+    } from '../js/rangos.js';
+    import {
+      recomendarPreflop, situacionPreflop, rangosDeRivales, APERTURA, ANTE_SUBIDA, PUSH,
+    } from '../js/preflop.js';
     import {
       teclear, formatearTecleado, leerTecleado, numeroATecleado, pasoDeCiegas, tamanoRapido, maximoAllin,
       revisarCantidad, accionDeCantidad, tamanosRapidos,
@@ -823,6 +833,149 @@
         const sCortoSpr = calcularEstado(jugar(nueva(3, 0, { fichas: [100, 100, 30] }), ['0 subida 6', '1 fold', '2 call', 'flop']));
         okR(Math.abs(spr(sCortoSpr, 0) - 24 / 13) < 1e-9, 'Con un rival de 30 fichas, las efectivas son las suyas: 24 / 13 = 1,8', String(spr(sCortoSpr, 0)));
         okR(spr(calcularEstado(jugar(m6, [...limp, '2 check', 'flop'])), 0) === null, 'Sin fichas no hay SPR');
+      }
+
+      // ---- Rangos (rangos.js) — paso 11, revisión ----
+      {
+        const okG = (bien, texto, detalle = '') => anotar('lista-rangos', bien, texto, detalle);
+        const cl = (t) => { const [a, b] = textoACartas(t); return clase(a, b); };
+        okG(cl('As Ks') === 'AKs' && cl('As Kd') === 'AKo' && cl('Kd As') === 'AKo' && cl('7c 7d') === '77' && cl('2h Th') === 'T2s',
+          'Clase de una mano: A♠K♠ → AKs; A♠K♦ → AKo (en cualquier orden); 7♣7♦ → 77; 2♥T♥ → T2s');
+        const lista = (t) => [...leerRango(t)].sort().join(' ');
+        okG(leerRango('77+').size === 8 && leerRango('77+').has('AA') && !leerRango('77+').has('66'), 'Leer "77+": de 77 a AA (8 parejas)', lista('77+'));
+        okG(lista('A9s+') === 'A9s AJs AKs AQs ATs', 'Leer "A9s+": A9s, ATs, AJs, AQs, AKs', lista('A9s+'));
+        okG(lista('A2s-A5s') === 'A2s A3s A4s A5s' && lista('KTo+') === 'KJo KQo KTo', 'Leer "A2s-A5s" y "KTo+"', lista('A2s-A5s') + ' · ' + lista('KTo+'));
+        okG(leerRango('JJ–66').size === 6 && lista('KQ') === 'KQo KQs' && leerRango('A2+').size === 24,
+          'Leer "JJ–66" (con raya), "KQ" (las dos) y "A2+" (24 clases)');
+        let error = false;
+        try { leerRango('AKx'); } catch { error = true; }
+        okG(error, 'Un rango mal escrito da error');
+        okG(numCombos('AA') === 6 && numCombos('AKs') === 4 && numCombos('AKo') === 12 && combosDe('AKo').length === 12,
+          'Combinaciones: AA = 6, AKs = 4, AKo = 12');
+        okG(CLASES.length === 169 && contarCombos(TODAS) === 1326, '169 clases y 1.326 combinaciones');
+        okG(ORDEN.length === 169 && new Set(ORDEN).size === 169 && ORDEN[0] === 'AA' && ORDEN.slice(0, 5).includes('KK')
+          && ORDEN.slice(-12).includes('72o') && ORDEN.indexOf('AKs') < ORDEN.indexOf('KJo'),
+          'Orden de las 169: AA la primera, KK entre las 5 primeras, 72o entre las 12 últimas, AKs antes que KJo');
+        const t15 = porcentaje(top(0.15));
+        okG(t15 >= 0.15 && t15 < 0.17, 'top(15 %) tiene entre el 15 % y el 17 % de las combinaciones', (t15 * 100).toFixed(1) + ' %');
+        const esperado = { 8: 10, 6: 13, 5: 17, 4: 21, 3: 28, 2: 45, 1: 37, hu: 65 };
+        const reales = Object.keys(esperado).map((k) => [k, porcentaje(APERTURA[k]) * 100]);
+        okG(reales.every(([k, v]) => Math.abs(v - esperado[k]) <= 5),
+          'El % de cada rango de apertura está cerca del de la tabla (± 5 puntos)', reales.map(([k, v]) => `${k}: ${v.toFixed(1)} %`).join(' · '));
+        const [As, Ks] = textoACartas('As Ks');
+        okG(combosDeRango(leerRango('AA'), [As, Ks]).length === 3 && combosDeRango(leerRango('AKs'), [As]).length === 3,
+          'Bloqueadores: con A♠ en tu mano, "AA" tiene 3 combinaciones y "AKs" 3');
+      }
+
+      // ---- Antes del flop: tablas por posición (preflop.js) ----
+      {
+        const okP = (bien, texto, detalle = '') => anotar('lista-preflop', bien, texto, detalle);
+        // Mesa de 6, ciegas 1/2, botón en 0: UTG 3, MP 4, CO 5, BTN 0, SB 1, BB 2
+        const con = (mano, cartas) => recomendarPreflop(mano, textoACartas(cartas));
+        const resumenP = (r) => r ? `${r.consejo}${r.hasta ? ' ' + r.hasta : ''} · ${r.texto}` : 'null';
+        const varias = (mano, manos) => manos.map((c) => c + ': ' + (con(mano, c).consejo + (con(mano, c).hasta ? ' ' + con(mano, c).hasta : ''))).join(' · ');
+
+        // UTG en mesa de 6 sin nadie dentro (caso de la revisión)
+        const utg = nueva(6, 0);
+        const fuertes = ['As Ad', 'Ks Kd', 'Qs Qd', 'Js Jd', 'As Ks'];
+        okP(fuertes.every((c) => con(utg, c).consejo === 'subir' && con(utg, c).hasta === 5),
+          'UTG en mesa de 6 sin nadie dentro: AA, KK, QQ, JJ y AKs → Subir hasta 5 (2,5 BB)', varias(utg, fuertes));
+        okP(con(utg, '7s 2d').consejo === 'fold' && con(utg, 'Ks 9d').consejo === 'fold', 'UTG: 72o y K9o → Fold', resumenP(con(utg, '7s 2d')));
+        const rAQ = con(jugar(utg, ['3 fold', '4 fold']), 'As Qd');
+        okP(rAQ.consejo === 'subir' && rAQ.texto.includes('AQo desde el CO') && rAQ.fuente === 'tabla',
+          'AQo desde el CO: Subir, con la explicación', resumenP(rAQ));
+        const sb = jugar(utg, ['3 fold', '4 fold', '5 fold', '0 fold']);
+        okP(con(sb, 'Ks 9d').consejo === 'subir' && con(sb, 'Ks 9d').hasta === 6, 'Desde la SB (todos se retiran): K9o → Subir hasta 6 (3 BB)', resumenP(con(sb, 'Ks 9d')));
+
+        // BB ante subida a 3 BB del BTN (caso de la revisión)
+        const bbBtn = jugar(utg, ['3 fold', '4 fold', '5 fold', '0 subida 6', '1 fold']);
+        okP(['7s 2d', '9s 3d', 'Js 4d'].every((c) => con(bbBtn, c).consejo === 'fold'),
+          'BB ante subida del BTN: 72o, 93o y J4o → Fold', varias(bbBtn, ['7s 2d', '9s 3d', 'Js 4d']));
+        okP(con(bbBtn, 'Ks Jd').consejo === 'call', 'BB ante subida del BTN: KJo → Call (sin 3-bet)', resumenP(con(bbBtn, 'Ks Jd')));
+        okP(con(bbBtn, 'As Ad').consejo === 'subir' && con(bbBtn, 'As Ad').hasta === 24, 'BB ante subida del BTN: AA → 3-bet hasta 24 (4× desde las ciegas)', resumenP(con(bbBtn, 'As Ad')));
+        let foldCombos = 0;
+        for (const c of CLASES) if (recomendarPreflop(bbBtn, combosDe(c)[0]).consejo === 'fold') foldCombos += numCombos(c);
+        okP(foldCombos / 1326 >= 0.4 && foldCombos / 1326 <= 0.6, 'BB ante el BTN, con las 169 manos: se retira con entre el 40 % y el 60 % de las combinaciones',
+          (foldCombos / 13.26).toFixed(1) + ' %');
+        const ep = jugar(utg, ['3 subida 6', '4 fold', '5 fold']);
+        okP(con(ep, 'Ks Jd').consejo === 'fold' && con(ep, 'Qs Qd').consejo === 'subir' && con(ep, '8s 8d').consejo === 'call',
+          'BTN ante subida del UTG (temprano): KJo → Fold; QQ → 3-bet; 88 → Call', varias(ep, ['Ks Jd', 'Qs Qd', '8s 8d']));
+        const sbVs = jugar(utg, ['3 fold', '4 fold', '5 subida 6', '0 fold']);
+        okP(con(sbVs, '9s 9d').consejo === 'subir' && con(sbVs, '7s 7d').consejo === 'fold',
+          'La SB ante subida del CO: 99 → 3-bet; 77 → Fold (desde la SB no se paga)', varias(sbVs, ['9s 9d', '7s 7d']));
+        const multi = jugar(utg, ['3 fold', '4 subida 6', '5 call']);
+        okP(con(multi, 'Ks Qs').consejo === 'call' && con(multi, 'Ks Qd').consejo === 'fold',
+          'Subida del MP y un call: KQs → Call; KQo → Fold (con varios, solo parejas y del mismo palo)', varias(multi, ['Ks Qs', 'Ks Qd']));
+
+        // Limpers
+        const unLimp = jugar(utg, ['3 call']);
+        okP(con(unLimp, 'As Qd').consejo === 'subir' && con(unLimp, 'As Qd').hasta === 8 && con(unLimp, '3s 3d').consejo === 'call',
+          'MP con 1 limper: AQo → Subir hasta 8 (3 BB + 1); 33 → Call (limp detrás)', varias(unLimp, ['As Qd', '3s 3d']));
+        const dosLimp = jugar(utg, ['3 call', '4 call']);
+        okP(con(dosLimp, 'As Qd').hasta === 10 && con(dosLimp, '9s 4d').consejo === 'fold', 'CO con 2 limpers: AQo → Subir hasta 10 (3 BB + 2); 94o → Fold', varias(dosLimp, ['As Qd', '9s 4d']));
+        const bbLimp = jugar(utg, ['3 call', '4 fold', '5 fold', '0 fold', '1 call']);
+        okP(con(bbLimp, '7s 2d').consejo === 'check' && con(bbLimp, 'As Ad').consejo === 'subir',
+          'La BB con limpers: 72o → Check (gratis); AA → Subir', varias(bbLimp, ['7s 2d', 'As Ad']));
+
+        // 3-bets y 4-bets
+        const tres = jugar(utg, ['3 subida 5', '4 fold', '5 fold', '0 fold', '1 fold', '2 subida 20']);
+        okP(con(tres, 'As Kd').consejo === 'subir' && con(tres, 'As Kd').hasta === 44 && con(tres, '7s 6s').consejo === 'fold',
+          'Abriste AKo desde UTG y la BB hace 3-bet: AKo → 4-bet hasta 44 (2,2×); 76s → Fold', varias(tres, ['As Kd', '7s 6s']));
+        okP(con(tres, 'Js Jd').consejo === 'call' && con(tres, 'Ts Td').consejo === 'call' && con(tres, 'As Jd').consejo === 'fold',
+          'Ante el 3-bet de la BB (en posición): JJ y TT → Call; AJo → Fold', varias(tres, ['Js Jd', 'Ts Td', 'As Jd']));
+        const tresBtn = jugar(utg, ['3 fold', '4 fold', '5 subida 5', '0 subida 15', '1 fold', '2 fold']);
+        okP(con(tresBtn, 'Js Jd').consejo === 'call' && con(tresBtn, 'Ts Td').consejo === 'fold' && con(tresBtn, 'As 5s').consejo === 'subir',
+          'Abriste desde el CO y el BTN hace 3-bet (fuera de posición): JJ → Call; TT → Fold; A5s → 4-bet', varias(tresBtn, ['Js Jd', 'Ts Td', 'As 5s']));
+        const cuatro = jugar(utg, ['3 subida 5', '4 fold', '5 fold', '0 fold', '1 fold', '2 subida 20', '3 subida 44']);
+        okP(con(cuatro, 'Qs Qd').consejo === 'allin' && con(cuatro, 'Js Jd').consejo === 'call' && con(cuatro, 'As Qs').consejo === 'fold',
+          'Ante un 4-bet: QQ → All-in; JJ → Call; AQs → Fold', varias(cuatro, ['Qs Qd', 'Js Jd', 'As Qs']));
+
+        // Fichas cortas (15 BB o menos) y la regla del 40 %
+        const corto = nueva(6, 0, { fichas: 20 });
+        okP(con(corto, 'As 5s').consejo === 'allin' && con(corto, 'As 5s').hasta === 20 && con(corto, 'Ks 9d').consejo === 'fold',
+          'UTG con 10 BB: A5s → All-in; K9o → Fold (modo all-in o fold)', varias(corto, ['As 5s', 'Ks 9d']));
+        const cortoBtn = jugar(corto, ['3 fold', '4 fold', '5 fold']);
+        okP(con(cortoBtn, 'Ks 9d').consejo === 'allin' && con(cortoBtn, '7s 2d').consejo === 'fold', 'BTN con 10 BB: K9o → All-in; 72o → Fold', varias(cortoBtn, ['Ks 9d', '7s 2d']));
+        const cortoVs = jugar(corto, ['3 subida 5', '4 fold', '5 fold', '0 fold', '1 fold']);
+        okP(con(cortoVs, '9s 9d').consejo === 'allin' && con(cortoVs, '8s 8d').consejo === 'fold', 'BB con 10 BB ante subida del UTG: 99 → All-in; 88 → Fold', varias(cortoVs, ['9s 9d', '8s 8d']));
+        const cortoAllin = jugar(corto, ['3 allin', '4 fold', '5 fold', '0 fold', '1 fold']);
+        okP(con(cortoAllin, 'As Ad').consejo === 'call', 'Si el que sube ya está all-in, el all-in es un Call', resumenP(con(cortoAllin, 'As Ad')));
+        const veinte = jugar(nueva(6, 0, { fichas: 40 }), ['3 fold', '4 fold', '5 fold', '0 subida 6', '1 fold']);
+        const r40 = con(veinte, 'As Ad');
+        okP(r40.consejo === 'allin' && r40.texto.includes('40 %'), 'BB con 20 BB ante subida del BTN: el 3-bet (hasta 24) es más del 40 % de tus fichas → All-in', resumenP(r40));
+        const pagar40 = jugar(nueva(6, 0, { fichas: 40 }), ['3 fold', '4 fold', '5 fold', '0 subida 18', '1 fold']);
+        okP(con(pagar40, 'Ts Td').consejo === 'allin', 'BB con 20 BB ante subida grande del BTN (9 BB): TT → pagar 16 es más del 40 % de 38 → All-in', resumenP(con(pagar40, 'Ts Td')));
+        okP(situacionPreflop(nueva(6, 0)).detras === 5 && situacionPreflop(nueva(9, 0)).detras === 8 && situacionPreflop(nueva(2, 0)).hu,
+          'Detrás de ti: UTG de 6 → 5; UTG de 9 → 8; mano a mano → tabla propia');
+
+        // Rangos de los rivales (después del flop)
+        const conCall = jugar(utg, ['3 subida 5', '4 fold', '5 call', '0 fold', '1 fold', '2 call', 'flop']);
+        const rr = rangosDeRivales(conCall, 2);
+        const de3 = rr.find((x) => x.asiento === 3), de5 = rr.find((x) => x.asiento === 5);
+        okP(rr.length === 2 && [...de3.rango].sort().join() === [...APERTURA[5]].sort().join() && de3.motivo.startsWith('subió desde el UTG'),
+          'El que abrió desde el UTG (mesa de 6): su rango de apertura', de3.motivo);
+        const callTemp = [...ANTE_SUBIDA.temprano.call].sort().join();
+        okP([...de5.rango].sort().join() === callTemp, 'El que pagó la subida desde el CO: el call ante subida temprana', de5.motivo);
+        const limpPot = jugar(utg, ['3 call', '4 fold', '5 fold', '0 fold', '1 fold', '2 check', 'flop']);
+        const deBB = rangosDeRivales(limpPot, 3).find((x) => x.asiento === 2);
+        okP(deBB.rango.size === TODAS.size - top(0.1).size && !deBB.rango.has('AA'), 'La BB que pasa sin subida: todo menos el top 10 %', deBB.motivo);
+
+        // Equidad contra rangos (con márgenes amplios)
+        const eqR = (mias, rango, it = 40000) => {
+          const m = textoACartas(mias);
+          const r = simular({ mias: m, rivales: 1, iteraciones: it, rangosRivales: [combosDeRango(rango, m)] });
+          return r.equidad / r.manos;
+        };
+        const t15r = top(0.15);
+        const e72 = eqR('7s 2d', t15r), eJ4 = eqR('Js 4d', t15r), eKJ = eqR('Ks Jd', t15r);
+        okP(e72 < eJ4 && eJ4 < eKJ && e72 > 0.18 && e72 < 0.34 && eKJ > 0.32 && eKJ < 0.48,
+          'Contra el top 15 %: 72o < J4o < KJo (72o ≈ 26 %, KJo ≈ 39 %)', [e72, eJ4, eKJ].map((x) => (x * 100).toFixed(1) + ' %').join(' · '));
+        const eAAr = eqR('Ks Kd', TODAS), eAAf = eqR('Ks Kd', leerRango('QQ+, AK'));
+        okP(eAAr > 0.79 && eAAr < 0.85 && eAAf < 0.7, 'KK: ≈ 82 % contra cualquier mano y bastante menos (≈ 60 %) contra QQ+, AK',
+          (eAAr * 100).toFixed(1) + ' % · ' + (eAAf * 100).toFixed(1) + ' %');
+        const [Ah, Kh] = textoACartas('Ah Kh');
+        const soloAA = simular({ mias: [Ah, Kh], rivales: 1, iteraciones: 2000, rangosRivales: [combosDeRango(leerRango('AA'), [Ah, Kh])] });
+        okP(soloAA.manos === 2000 && combosDeRango(leerRango('AA'), [Ah, Kh]).length === 3, 'Con A♥ en tu mano, un rango "solo AA" reparte de las 3 combinaciones que quedan');
       }
 
       // ---- Cantidades y teclado (teclado.js) ----

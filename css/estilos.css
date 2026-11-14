@@ -525,6 +525,7 @@ h2 {
 .consejo-fold { color: #ffc2c2; }
 .consejo-call { color: #9cc9ff; }
 .consejo-apostar, .consejo-subir { color: #ffe0a8; }
+.consejo-allin { color: #ffb37a; }
 .consejo-check { color: var(--texto); }
 .te-toca-texto { font-size: 0.9rem; line-height: 1.3; }
 .aviso-optimista { font-size: 0.78rem; line-height: 1.25; color: var(--texto-suave); }

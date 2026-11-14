@@ -13,10 +13,17 @@ import { evaluar } from './evaluador.js';
  *  - mesa: de 0 a 5 cartas ya conocidas
  *  - rivales: número de rivales (1–8)
  *  - rivalesConocidos: (opcional, para los tests) manos fijas de algunos rivales, p. ej. [[KK]]
+ *  - rangosRivales: (opcional) para cada rival, la lista de combinaciones [c1, c2] de su rango
+ *    (rangos.js, combosDeRango), o null = mano al azar. A cada rival se le da una combinación
+ *    de su rango que no use cartas ya vistas ni de otro rival; si tras varios intentos no hay
+ *    manera, recibe una mano al azar.
  * Devuelve { manos, ganadas, empatadas, perdidas, equidad } donde "equidad" es la suma de lo
  * que te llevas en cada mano: 1 si ganas, 1/2 si empatas con uno, 1/3 si empatas con dos…
  */
-export function simular({ mias, mesa = [], rivales, iteraciones, rivalesConocidos = [] }) {
+export function simular({ mias, mesa = [], rivales, iteraciones, rivalesConocidos = [], rangosRivales = null }) {
+  if (rangosRivales && rangosRivales.some((r) => r && r.length)) {
+    return simularConRangos({ mias, mesa, rivales, iteraciones, rangosRivales });
+  }
   // Cartas que quedan en la baraja (las 52 menos las que ya se ven)
   const vistas = new Set([...mias, ...mesa, ...rivalesConocidos.flat()]);
   const baraja = [];
@@ -81,5 +88,69 @@ export function simular({ mias, mesa = [], rivales, iteraciones, rivalesConocido
     }
   }
 
+  return { manos: iteraciones, ganadas, empatadas, perdidas, equidad };
+}
+
+const INTENTOS = 20; // intentos para dar a un rival una combinación de su rango sin cartas repetidas
+
+/** Como simular(), pero con las manos de los rivales sacadas de sus rangos. */
+function simularConRangos({ mias, mesa, rivales, iteraciones, rangosRivales }) {
+  const faltanMesa = 5 - mesa.length;
+  const usada = new Uint8Array(52);
+  const fijas = [...mias, ...mesa];
+  const baraja = new Int8Array(52);
+  const miMano = [mias[0], mias[1], ...mesa, ...new Array(faltanMesa).fill(0)];
+  const manosRivales = [];
+  for (let r = 0; r < rivales; r++) manosRivales.push([0, 0, ...mesa, ...new Array(faltanMesa).fill(0)]);
+  const alAzar = new Uint8Array(rivales);
+  let ganadas = 0, empatadas = 0, perdidas = 0, equidad = 0;
+
+  for (let it = 0; it < iteraciones; it++) {
+    usada.fill(0);
+    for (const c of fijas) usada[c] = 1;
+    // 1. Los rivales con rango: una combinación al azar que no choque
+    for (let r = 0; r < rivales; r++) {
+      const rango = rangosRivales[r];
+      alAzar[r] = 1;
+      if (!rango || !rango.length) continue;
+      for (let k = 0; k < INTENTOS; k++) {
+        const [a, b] = rango[Math.floor(Math.random() * rango.length)];
+        if (usada[a] || usada[b]) continue;
+        usada[a] = 1; usada[b] = 1;
+        manosRivales[r][0] = a; manosRivales[r][1] = b;
+        alAzar[r] = 0;
+        break;
+      }
+    }
+    // 2. Lo que falta (mesa y rivales sin rango) sale de la baraja que queda
+    let n = 0;
+    for (let c = 0; c < 52; c++) if (!usada[c]) baraja[n++] = c;
+    let siguiente = 0;
+    const sacar = () => {
+      const k = siguiente + Math.floor(Math.random() * (n - siguiente));
+      const t = baraja[siguiente]; baraja[siguiente] = baraja[k]; baraja[k] = t;
+      return baraja[siguiente++];
+    };
+    for (let j = 0; j < faltanMesa; j++) {
+      const c = sacar();
+      miMano[2 + mesa.length + j] = c;
+      for (let r = 0; r < rivales; r++) manosRivales[r][2 + mesa.length + j] = c;
+    }
+    for (let r = 0; r < rivales; r++) {
+      if (alAzar[r]) { manosRivales[r][0] = sacar(); manosRivales[r][1] = sacar(); }
+    }
+
+    const mia = evaluar(miMano);
+    let mejorRival = -1;
+    let empatadosConmigo = 0;
+    for (let r = 0; r < rivales; r++) {
+      const suya = evaluar(manosRivales[r]);
+      if (suya > mejorRival) mejorRival = suya;
+      if (suya === mia) empatadosConmigo++;
+    }
+    if (mia > mejorRival) { ganadas++; equidad += 1; }
+    else if (mia === mejorRival) { empatadas++; equidad += 1 / (empatadosConmigo + 1); }
+    else perdidas++;
+  }
   return { manos: iteraciones, ganadas, empatadas, perdidas, equidad };
 }

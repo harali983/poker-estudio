@@ -28,13 +28,15 @@ import { calcularFinal, avisoBotes } from './final.js';
 import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad, tamanoRapido } from './teclado.js';
-import { recomendar, spr, AVISO_OPTIMISTA, NOMBRE_CONSEJO } from './recomendacion.js';
+import { recomendar, spr, potOdds, AVISO_RANGOS, AVISO_PREFLOP, NOMBRE_CONSEJO } from './recomendacion.js';
+import { recomendarPreflop, rangosDeRivales } from './preflop.js';
+import { combosDeRango } from './rangos.js';
 import { ErrorBD } from './db.js';
 import { mostrarError } from './avisos.js';
 
 const NOMBRE_CALLE = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
 const MESA_POR_CALLE = { preflop: 0, flop: 3, turn: 4, river: 5 };
-const BOTON_DE_CONSEJO = { fold: 'btn-fold', check: 'btn-check', call: 'btn-call', apostar: 'btn-apostar', subir: 'btn-subir' };
+const BOTON_DE_CONSEJO = { fold: 'btn-fold', check: 'btn-check', call: 'btn-call', apostar: 'btn-apostar', subir: 'btn-subir', allin: 'btn-subir' };
 const BOTONES = ['btn-fold', 'btn-check', 'btn-call', 'btn-apostar', 'btn-subir',
   'btn-cartas', 'btn-siguiente', 'btn-empezar-mano'];
 
@@ -467,10 +469,12 @@ export function iniciarMano() {
     pintarCartas();
   }
 
-  // ---- Te toca: equidad, pot odds, SPR y la recomendación (recomendacion.js) ----
-  // La equidad la calcula el mismo worker que la calculadora (contra manos al azar, tantas como
-  // rivales vivos). El resultado se guarda por situación (tus cartas, la mesa y los rivales):
-  // si vuelve a tocarte sin que cambie nada, no se recalcula.
+  // ---- Te toca: el consejo, la equidad, pot odds y SPR ----
+  // Antes del flop, el consejo sale de las tablas por posición (preflop.js); la equidad es solo un
+  // dato, contra el rango de los que ya han entrado. Después del flop, la regla de recomendacion.js
+  // con la equidad contra el rango que se supone a cada rival vivo según lo que hizo antes del flop.
+  // La equidad la calcula el worker de la calculadora. El resultado se guarda por situación (tus
+  // cartas, la mesa y los rangos): si vuelve a tocarte sin que cambie nada, no se recalcula.
   let calculo = null; // { clave, worker, resultado }
 
   function situacion(estado) {
@@ -478,11 +482,23 @@ export function iniciarMano() {
     const mias = mano.misCartas || [];
     if (mias.length !== 2) return { falta: 'Pon tus cartas (abajo, "Tú") para ver la recomendación.' };
     if (estado.mesa.length !== MESA_POR_CALLE[estado.calle]) return { falta: 'Faltan cartas de la mesa por anotar: sin recomendación.' };
-    const rivales = estado.vivos.length - 1;
-    return { clave: JSON.stringify([mias, estado.mesa, rivales]), mias, mesa: estado.mesa, rivales };
+    const preflop = estado.calle === 'preflop';
+    // Antes del flop, la equidad solo contra los que ya han entrado; después, contra todos los vivos
+    const rangos = rangosDeRivales(mano, estado.turno).filter((x) => !preflop || x.rango);
+    const vistas = [...mias, ...estado.mesa];
+    return {
+      preflop,
+      tabla: preflop ? recomendarPreflop(mano, mias) : null,
+      clave: rangos.length ? JSON.stringify([mias, estado.mesa, rangos.map((x) => [x.asiento, x.motivo])]) : null,
+      mias,
+      mesa: estado.mesa,
+      rivales: rangos.length,
+      rangos: rangos.map((x) => (x.rango ? combosDeRango(x.rango, vistas) : null)),
+    };
   }
 
   function asegurarCalculo(sit) {
+    if (!sit.clave) { pararCalculo(); return; }
     if (calculo && calculo.clave === sit.clave) return;
     pararCalculo();
     const worker = new Worker(new URL('./equidad.worker.js', import.meta.url), { type: 'module' });
@@ -498,7 +514,7 @@ export function iniciarMano() {
       console.error('Error en el cálculo de la equidad:', error);
       if (calculo === este) { este.worker = null; este.error = true; if (mano) pintarTeToca(calcularEstado(mano)); }
     };
-    worker.postMessage({ mias: sit.mias, mesa: sit.mesa, rivales: sit.rivales });
+    worker.postMessage({ mias: sit.mias, mesa: sit.mesa, rivales: sit.rivales, rangos: sit.rangos });
   }
 
   function pararCalculo() {
@@ -506,11 +522,17 @@ export function iniciarMano() {
     calculo = null;
   }
 
-  // La recomendación para la situación actual, o null si todavía no hay equidad
+  // La recomendación para la situación actual, o null si todavía no hay equidad (después del flop)
   function recomendacionActual(estado) {
     const sit = situacion(estado);
-    if (!sit || sit.falta || !calculo || calculo.clave !== sit.clave || !calculo.resultado) return null;
-    const res = calculo.resultado;
+    if (!sit || sit.falta) return null;
+    const res = sit.clave && calculo && calculo.clave === sit.clave ? calculo.resultado : null;
+    if (sit.preflop) {
+      if (!sit.tabla) return null;
+      return { ...sit.tabla, potOdds: potOdds(estado.aPagar, estado.bote), destacar: false,
+        equidad: res ? res.equidad : null, manos: res ? res.manos : 0, terminado: res ? res.terminado : true, rivales: sit.rivales };
+    }
+    if (!res) return null;
     const o = opciones(estado);
     const r = recomendar({
       equidad: res.equidad,
@@ -532,7 +554,8 @@ export function iniciarMano() {
     if (!r) return {};
     const evento = mano.eventos.length;
     const decision = { evento, equidad: r.equidad, potOdds: r.potOdds, consejo: r.consejo, texto: r.texto, manos: r.manos };
-    if (r.hasta !== null) decision.hasta = r.hasta;
+    if (r.hasta !== null && r.hasta !== undefined) decision.hasta = r.hasta;
+    if (r.fuente) { decision.fuente = r.fuente; decision.clase = r.clase; }
     return { decisiones: [...(mano.decisiones || []).filter((d) => d.evento < evento), decision] };
   }
 
@@ -551,7 +574,7 @@ export function iniciarMano() {
     const s = spr(estado, yo.asiento);
     const textoSpr = s === null ? '' : 'SPR ' + s.toLocaleString('es-ES', { maximumFractionDigits: 1 });
     consejo.className = 'consejo';
-    aviso.textContent = AVISO_OPTIMISTA;
+    aviso.textContent = sit.preflop ? AVISO_PREFLOP : AVISO_RANGOS;
     aviso.classList.remove('destacado');
 
     if (sit.falta) {
@@ -571,16 +594,19 @@ export function iniciarMano() {
     consejo.textContent = NOMBRE_CONSEJO[r.consejo];
     consejo.classList.add('consejo-' + r.consejo);
     const pct = (x) => Math.round(x * 100) + ' %';
+    const rivales = `${r.rivales} ${r.rivales === 1 ? 'rival' : 'rivales'}`;
     datos.textContent = [
-      `Equidad ${pct(r.equidad)}`,
-      r.potOdds > 0 ? `necesitas ${pct(r.potOdds)}` : '',
-      `${r.rivales} ${r.rivales === 1 ? 'rival' : 'rivales'}`,
+      r.equidad === null ? '' : `Equidad ${pct(r.equidad)}${sit.preflop ? ' contra su rango' : ''}`,
+      r.potOdds > 0 && r.equidad !== null ? `necesitas ${pct(r.potOdds)}` : '',
+      sit.preflop ? '' : rivales,
       textoSpr,
       r.terminado ? '' : 'calculando…',
     ].filter(Boolean).join(' · ');
     texto.textContent = r.texto;
     aviso.classList.toggle('destacado', r.destacar);
-    $(BOTON_DE_CONSEJO[r.consejo]).classList.add('recomendado');
+    // All-in se anota con el teclado de Subir (o con Call, si no se puede subir)
+    const boton = r.consejo === 'allin' && $('btn-subir').hidden ? 'btn-call' : BOTON_DE_CONSEJO[r.consejo];
+    $(boton).classList.add('recomendado');
   }
 
   // Qué mano tienes, debajo de la fila de cartas (si estás en la mano, vivo y con tus 2 cartas).

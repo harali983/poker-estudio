@@ -1,7 +1,7 @@
 // equidad.worker.js: Web Worker que calcula la equidad en un hilo aparte.
 // Así la pantalla sigue respondiendo mientras se simulan miles de manos.
 //
-// Recibe:  { mias, mesa, rivales }
+// Recibe:  { mias, mesa, rivales, rangos? } (rangos: combinaciones por rival o null, ver equidad.js)
 // Envía (varias veces): { manos, ganar, empatar, equidad, margen, progreso, terminado }
 // Para cancelar un cálculo, app.js termina el worker (worker.terminate()) y crea otro.
 
@@ -13,13 +13,13 @@ const AVISO_MS = 200;      // enviar un resultado parcial cada 0,2 s
 const TANDA = 1000;        // manos por tanda entre comprobación y comprobación
 
 self.onmessage = (evento) => {
-  const { mias, mesa, rivales } = evento.data;
+  const { mias, mesa, rivales, rangos = null } = evento.data;
   const total = { manos: 0, ganadas: 0, empatadas: 0, equidad: 0 };
   const inicio = performance.now();
   let ultimoAviso = inicio;
 
   for (;;) {
-    const r = simular({ mias, mesa, rivales, iteraciones: TANDA });
+    const r = simular({ mias, mesa, rivales, iteraciones: TANDA, rangosRivales: rangos });
     total.manos += r.manos;
     total.ganadas += r.ganadas;
     total.empatadas += r.empatadas;

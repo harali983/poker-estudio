@@ -105,7 +105,7 @@ export function tamanosRapidos(estado, paso, bb) {
 }
 
 /** Redondea al paso de las ciegas, sube a la mínima si no llega y limita al all-in. */
-function ajustarTamano(estado, exacto, paso) {
+export function ajustarTamano(estado, exacto, paso) {
   let hasta = redondear(Math.round(exacto / paso) * paso);
   let ajuste = null;
   if (hasta < estado.subidaMinima) {

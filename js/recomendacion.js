@@ -10,13 +10,15 @@
 // del bote (1 / jugadores en la mano) en MARGEN_PARTE puntos. Con 1 rival, subir pide ≥ 60 %;
 // con 2, ≥ 43 %. Los umbrales se ajustarán al probarlo; el tamaño fino llega en la Fase 4.
 //
-// La equidad contra manos al azar es OPTIMISTA: quien apuesta o sube suele tener mejor mano
-// que una al azar. Por eso el aviso se ve siempre y se destaca en el river y ante apuestas
-// grandes (≥ ½ bote), que es cuando más se equivoca.
+// Desde la v0.2.17 esta regla solo se usa DESPUÉS del flop (antes, preflop.js con tablas), y la
+// equidad se calcula contra el rango que se supone a cada rival según lo que hizo antes del flop.
+// Sigue siendo una estimación: no tiene en cuenta cómo apuestan después. Por eso el aviso se ve
+// siempre y se destaca en el river y ante apuestas grandes (≥ ½ bote).
 
 export const MARGEN_POT_ODDS = 0.15;
 export const MARGEN_PARTE = 0.10;
-export const AVISO_OPTIMISTA = 'La equidad contra manos al azar es optimista: quien apuesta o sube suele tener mejor mano que una al azar.';
+export const AVISO_RANGOS = 'Estimación: supone rangos típicos según lo que hizo cada rival antes del flop; no tiene en cuenta cómo apuestan después.';
+export const AVISO_PREFLOP = 'Tablas estándar por posición: no tienen en cuenta al rival concreto ni el ante.';
 
 const pct = (x) => Math.round(x * 100) + ' %';
 const num = (n) => n.toLocaleString('es-ES', { maximumFractionDigits: 2 });
@@ -99,4 +101,4 @@ export function recomendar(datos) {
 }
 
 /** Nombre del consejo para el botón grande del panel. */
-export const NOMBRE_CONSEJO = { fold: 'Fold', check: 'Check', call: 'Call', apostar: 'Apostar', subir: 'Subir' };
+export const NOMBRE_CONSEJO = { fold: 'Fold', check: 'Check', call: 'Call', apostar: 'Apostar', subir: 'Subir', allin: 'All-in' };
