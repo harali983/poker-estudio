@@ -840,12 +840,20 @@
         okF(pWalk.find((p) => p.jugadorId === 'j2').cuentaPreflop === false && pWalk.filter((p) => p.cuentaPreflop).length === 5
           && pWalk.find((p) => p.jugadorId === 'j3').puedeAbrir,
           'Todos se retiran y la BB gana sin hablar: esa mano no cuenta para su VPIP');
-        const pShow = cerrarMano(m3Cartas, partidaDe(3, 0), s3, { ganadores: [2], mostradas: [{ asiento: 2, cartas: textoACartas('Kc Kd') }] }).participaciones;
+        // Elegido a mano (manual): con AA contra KK, las cartas dirían que ganas tú
+        const pShow = cerrarMano(m3Cartas, partidaDe(3, 0), s3, { ganadores: [2], manual: true, mostradas: [{ asiento: 2, cartas: textoACartas('Kc Kd') }] }).participaciones;
         const pBB = pShow.find((p) => p.jugadorId === 'j2');
         okF(pBB.llegoAShowdown && pBB.ganoShowdown && pBB.mostro.length === 2 && pShow.find((p) => p.jugadorId === 'yo').llegoAShowdown
           && !pShow.find((p) => p.jugadorId === 'yo').ganoShowdown && pShow.find((p) => p.jugadorId === 'j1').vioFlop === false
           && pShow.find((p) => p.jugadorId === 'yo').puedeAbrir && !pShow.find((p) => p.jugadorId === 'yo').pfr,
-          'Showdown: llegan tú y la BB; gana la BB y se guardan sus cartas mostradas');
+          'Showdown: llegan tú y la BB; gana la BB (elegida a mano) y se guardan sus cartas mostradas');
+        // Lo mismo sin manual: la mesa de los tests es 2♠ 2♥ 2♦ 2♣ 3♠ → póker de 2 con A gana al de K
+        const pShowAuto = cerrarMano(m3Cartas, partidaDe(3, 0), s3, { ganadores: [2], mostradas: [{ asiento: 2, cartas: textoACartas('Kc Kd') }] });
+        okF(ver(pShowAuto.mano.final.ganadores) === '[{"asiento":0,"cantidad":5}]'
+          && pShowAuto.participaciones.find((p) => p.jugadorId === 'yo').ganoShowdown
+          && !pShowAuto.participaciones.find((p) => p.jugadorId === 'j2').ganoShowdown,
+          'Showdown sin elegir a mano: con tus AA contra los KK de la BB, gana AA (se ignora la elección guardada sin "manual")',
+          ver(pShowAuto.mano.final.ganadores));
         const pSinNombre = { ...partidaDe(3, 0), asientos: partidaDe(3, 0).asientos.map((a) => (a.asiento === 1 ? { ...a, jugadorId: null } : a)) };
         const mSinNombre = jugar(crearMano(pSinNombre, { id: 'mn', numero: 1, fecha: 'x' }), ['0 fold', '1 fold']);
         okF(cerrarMano(mSinNombre, pSinNombre, calcularEstado(mSinNombre)).participaciones.length === 2,
