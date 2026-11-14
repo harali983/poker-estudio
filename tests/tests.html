@@ -73,7 +73,7 @@
       clase, leerRango, numCombos, combosDe, combosDeRango, contarCombos, porcentaje, top, CLASES, ORDEN, TODAS,
     } from '../js/rangos.js';
     import {
-      recomendarPreflop, situacionPreflop, rangosDeRivales, APERTURA, ANTE_SUBIDA, PUSH,
+      recomendarPreflop, situacionPreflop, rangosDeRivales, APERTURA, ANTE_SUBIDA, PUSH, decidirAnteAllin,
     } from '../js/preflop.js';
     import {
       teclear, formatearTecleado, leerTecleado, numeroATecleado, pasoDeCiegas, tamanoRapido, maximoAllin,
@@ -1025,7 +1025,73 @@
         const cortoVs = jugar(corto, ['3 subida 5', '4 fold', '5 fold', '0 fold', '1 fold']);
         okP(con(cortoVs, '9s 9d').consejo === 'allin' && con(cortoVs, '8s 8d').consejo === 'fold', 'BB con 10 BB ante subida del UTG: 99 → All-in; 88 → Fold', varias(cortoVs, ['9s 9d', '8s 8d']));
         const cortoAllin = jugar(corto, ['3 allin', '4 fold', '5 fold', '0 fold', '1 fold']);
-        okP(con(cortoAllin, 'As Ad').consejo === 'call', 'Si el que sube ya está all-in, el all-in es un Call', resumenP(con(cortoAllin, 'As Ad')));
+        okP(con(cortoAllin, 'As Ad').porEquidad && con(cortoAllin, 'As Ad').consejo === null
+          && decidirAnteAllin(con(cortoAllin, 'As Ad'), 0.8, 18, 23).consejo === 'call',
+          'Si el que sube ya está all-in, se decide por equidad (AA con 80 % → Call)', resumenP(con(cortoAllin, 'As Ad')));
+
+        // ---- Ante un all-in: equidad contra su rango frente a las pot odds (revisión del paso 11) ----
+        // Equidad (Monte Carlo, con el mismo reparto desde rangos que usa el worker) contra los rivales que han entrado
+        const equidadAnte = (mano, yo, cartas, iteraciones) => {
+          const mias = textoACartas(cartas);
+          const rangos = rangosDeRivales(mano, yo).filter((x) => x.rango);
+          const r = simular({ mias, rivales: rangos.length, iteraciones, rangosRivales: rangos.map((x) => combosDeRango(x.rango, mias)) });
+          return r.equidad / r.manos;
+        };
+        const decideAnte = (mano, yo, cartas, iteraciones = 20000) => {
+          const st = calcularEstado(mano);
+          return decidirAnteAllin(con(mano, cartas), equidadAnte(mano, yo, cartas, iteraciones), st.aPagar, st.bote);
+        };
+        // BB con 10 BB ante all-in del BTN con 10 BB (caso de la revisión)
+        const bbPush = jugar(corto, ['3 fold', '4 fold', '5 fold', '0 allin', '1 fold']);
+        const sPush = calcularEstado(bbPush);
+        const rBtn = rangosDeRivales(bbPush, 2)[0];
+        okP(sPush.turno === 2 && sPush.aPagar === 18 && sPush.bote === 23 && con(bbPush, 'As 7d').porEquidad
+          && [...rBtn.rango].sort().join() === [...PUSH[2]].sort().join(),
+          'BB con 10 BB ante all-in del BTN: se decide por equidad contra el rango de all-in del BTN; pagar 18 con bote de 23 → necesitas 44 %',
+          rBtn.motivo + ' · ' + resumenP(con(bbPush, 'As 7d')));
+        const callsPush = ['As 7d', 'Ks 9d', '2s 2d', 'Qs Js'];
+        const dPush = callsPush.map((c) => [c, decideAnte(bbPush, 2, c)]);
+        okP(dPush.every(([, d]) => d.consejo === 'call'),
+          'BB con 10 BB ante all-in del BTN: A7o, K9o, 22 y QJs → Call (equidad por encima del 44 %)',
+          dPush.map(([c, d]) => c + ': ' + d.consejo + ' · ' + d.texto).join(' | '));
+        const d72 = decideAnte(bbPush, 2, '7s 2d');
+        okP(d72.consejo === 'fold' && d72.texto.startsWith('Fold'), 'BB con 10 BB ante all-in del BTN: 72o → Fold', d72.texto);
+        let callPush = 0;
+        for (const c of CLASES) {
+          const mias = combosDe(c)[0];
+          const rangos = rangosDeRivales(bbPush, 2);
+          const sim = simular({ mias, rivales: 1, iteraciones: 1200, rangosRivales: [combosDeRango(rangos[0].rango, mias)] });
+          const eq = sim.equidad / sim.manos;
+          if (decidirAnteAllin(recomendarPreflop(bbPush, mias), eq, 18, 23).consejo === 'call') callPush += numCombos(c);
+        }
+        okP(callPush / 1326 >= 0.25 && callPush / 1326 <= 0.5,
+          'BB con 10 BB ante all-in del BTN, con las 169 manos: paga entre el 25 % y el 50 % (antes, el 6 %)', (callPush / 13.26).toFixed(1) + ' %');
+        const hondo = jugar(nueva(6, 0, { fichas: 200 }), ['3 allin', '4 fold', '5 fold', '0 fold', '1 fold']);
+        const rHondo = rangosDeRivales(hondo, 2)[0];
+        okP(con(hondo, 'Ks Kd').porEquidad && [...rHondo.rango].sort().join() === [...PUSH[5]].sort().join(),
+          'All-in del UTG con 100 BB: también por equidad, contra su rango de all-in (no el de apertura)', rHondo.motivo);
+        const tresAllin = jugar(nueva(6, 0, { fichas: 60 }), ['3 subida 5', '4 fold', '5 fold', '0 fold', '1 fold', '2 allin']);
+        const rTres = rangosDeRivales(tresAllin, 3)[0];
+        okP(con(tresAllin, 'Ts Td').porEquidad && rTres.asiento === 2 && [...rTres.rango].sort().join() === [...ANTE_SUBIDA.temprano.tresBet].sort().join(),
+          'Abriste desde el UTG y la BB resube all-in (30 BB): por equidad, contra su rango de 3-bet', rTres.motivo);
+
+        // Mano a mano: la BB ante una subida a 2,5 BB del BTN/SB defiende alrededor del 65–70 %
+        const huSube = jugar(nueva(2, 0), ['0 subida 5']);
+        let defiendeHu = 0;
+        for (const c of CLASES) if (recomendarPreflop(huSube, combosDe(c)[0]).consejo !== 'fold') defiendeHu += numCombos(c);
+        okP(defiendeHu / 1326 >= 0.62 && defiendeHu / 1326 <= 0.72,
+          'Mano a mano, la BB ante subida a 2,5 BB: defiende (call o 3-bet) entre el 62 % y el 72 % (antes, el 44 %)', (defiendeHu / 13.26).toFixed(1) + ' %');
+        okP(con(huSube, 'Ks 2d').consejo === 'call' && con(huSube, 'Qs 8d').consejo === 'call' && con(huSube, '7s 2d').consejo === 'fold'
+          && con(huSube, 'As Ad').consejo === 'subir' && con(huSube, 'Ks 2d').texto.includes('mano a mano'),
+          'Mano a mano, la BB: K2o y Q8o → Call; 72o → Fold; AA → 3-bet', varias(huSube, ['Ks 2d', 'Qs 8d', '7s 2d', 'As Ad']));
+
+        // La SB ante subida del BTN: 3-bet alrededor del 12 %
+        const sbBtn = jugar(utg, ['3 fold', '4 fold', '5 fold', '0 subida 5']);
+        let tresSb = 0;
+        for (const c of CLASES) if (recomendarPreflop(sbBtn, combosDe(c)[0]).consejo === 'subir') tresSb += numCombos(c);
+        okP(tresSb / 1326 >= 0.1 && tresSb / 1326 <= 0.14 && con(sbBtn, '7s 7d').consejo === 'subir' && con(sbBtn, '5s 5d').consejo === 'fold',
+          'La SB ante subida del BTN: resube entre el 10 % y el 14 % (antes, el 7 %); 77 → 3-bet; 55 → Fold',
+          (tresSb / 13.26).toFixed(1) + ' % · ' + varias(sbBtn, ['7s 7d', '5s 5d']));
         const veinte = jugar(nueva(6, 0, { fichas: 40 }), ['3 fold', '4 fold', '5 fold', '0 subida 6', '1 fold']);
         const r40 = con(veinte, 'As Ad');
         okP(r40.consejo === 'allin' && r40.texto.includes('40 %'), 'BB con 20 BB ante subida del BTN: el 3-bet (hasta 24) es más del 40 % de tus fichas → All-in', resumenP(r40));

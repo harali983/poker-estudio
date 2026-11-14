@@ -29,7 +29,7 @@ import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad, tamanoRapido } from './teclado.js';
 import { recomendar, spr, potOdds, AVISO_RANGOS, AVISO_PREFLOP, NOMBRE_CONSEJO } from './recomendacion.js';
-import { recomendarPreflop, rangosDeRivales } from './preflop.js';
+import { recomendarPreflop, rangosDeRivales, decidirAnteAllin } from './preflop.js';
 import { combosDeRango } from './rangos.js';
 import { ErrorBD } from './db.js';
 import { mostrarError } from './avisos.js';
@@ -469,7 +469,8 @@ export function iniciarMano() {
 
   // ---- Te toca: el consejo, la equidad, pot odds y SPR ----
   // Antes del flop, el consejo sale de las tablas por posición (preflop.js); la equidad es solo un
-  // dato, contra el rango de los que ya han entrado. Después del flop, la regla de recomendacion.js
+  // dato, contra el rango de los que ya han entrado. Ante un all-in, en cambio, decide la equidad
+  // contra su rango frente a las pot odds (decidirAnteAllin). Después del flop, la regla de recomendacion.js
   // con la equidad contra el rango que se supone a cada rival vivo según lo que hizo antes del flop.
   // La equidad la calcula el worker de la calculadora. El resultado se guarda por situación (tus
   // cartas, la mesa y los rangos): si vuelve a tocarte sin que cambie nada, no se recalcula.
@@ -527,6 +528,13 @@ export function iniciarMano() {
     const res = sit.clave && calculo && calculo.clave === sit.clave ? calculo.resultado : null;
     if (sit.preflop) {
       if (!sit.tabla) return null;
+      if (sit.tabla.porEquidad) {
+        // Ante un all-in: tu equidad contra su rango frente a las pot odds (hace falta el cálculo)
+        if (!res) return null;
+        const d = decidirAnteAllin(sit.tabla, res.equidad, estado.aPagar, estado.bote);
+        return { ...d, potOdds: potOdds(estado.aPagar, estado.bote), destacar: false,
+          equidad: res.equidad, manos: res.manos, terminado: res.terminado, rivales: sit.rivales };
+      }
       return { ...sit.tabla, potOdds: potOdds(estado.aPagar, estado.bote), destacar: false,
         equidad: res ? res.equidad : null, manos: res ? res.manos : 0, terminado: res ? res.terminado : true, rivales: sit.rivales };
     }

@@ -14,10 +14,16 @@
 //
 // Fichas cortas (15 BB efectivas o menos): all-in o fold, con rangos de "push".
 // Si pagar, o el tamaño recomendado, es más del 40 % de tus fichas: all-in.
+//
+// ANTE UN ALL-IN (el último que subió está all-in) no se usa una tabla fija: se compara tu
+// equidad contra el rango de quien va all-in (su rango de push según su posición, o su rango de
+// 3-bet) con las pot odds. La equidad la calcula el worker; recomendarPreflop devuelve
+// porEquidad: true y la pantalla decide con decidirAnteAllin() cuando la tiene.
 
 import { calcularEstado, posicionesDeMano } from './motor.js';
 import { leerRango, unir, menos, parejasYMismoPalo, porcentaje, top, TODAS, clase } from './rangos.js';
 import { ajustarTamano, pasoDeCiegas } from './teclado.js';
+import { potOdds } from './recomendacion.js';
 
 export const LIMITE_CORTO = 15;  // BB efectivas o menos → modo all-in o fold
 export const PARTE_ALLIN = 0.4;  // pagar o subir más del 40 % de tus fichas → all-in
@@ -61,8 +67,18 @@ export const ANTE_SUBIDA = {
     bb: R('99-22, A9s-A6s, A3s-A2s, K2s-KJs, Q6s+, J7s+, T7s+, 96s+, 85s+, 75s+, 64s+, 54s, A2o-AJo, K8o+, Q9o+, J9o+, T8o+, 98o, 87o'),
   },
 };
+/**
+ * Mano a mano, la BB ante una subida normal (hasta 4 BB) del BTN/SB: defiende alrededor del
+ * 65–70 % de las manos (paga mucho, porque ya tiene puesta la ciega y cierra la acción).
+ */
+export const ANTE_SUBIDA_HU = {
+  tresBet: R('TT+, ATs+, KJs+, QJs, A5s-A2s, AJo+, KQo'),
+  defiende: R('22+, A2s+, K2s+, Q2s+, J2s+, T2s+, 92s+, 82s+, 72s+, 62s+, 52s+, 42s+, 32s, A2o+, K2o+, Q6o+, J7o+, T7o+, 97o+, 87o, 76o, 65o'),
+};
 /** La SB no paga: sube (3-bet) con la tabla + estas, o se retira. */
 export const SB_EXTRA = R('99-88, ATs, KJs');
+/** Y ante el BTN (el robo más amplio), además estas: la SB resube alrededor del 12 %. */
+export const SB_EXTRA_BTN = R('77-66, A9s-A8s, KTs, QJs, QTs, JTs, AJo, KQo');
 
 /** Ante un 3-bet, habiendo abierto tú. */
 export const ANTE_3BET = {
@@ -77,15 +93,15 @@ export const ANTE_4BET = { subir: R('QQ+, AKs, AKo'), call: R('JJ') };
 /** Lo que se supone a un rival que paga en esa situación (las mejores habrían subido). */
 const CALL_4BET_RIVAL = R('JJ, TT, AQs, AKs, AKo');
 
-/** Fichas cortas: all-in (push) sin nadie que haya subido, según cuántos quedan detrás. */
+/** Fichas cortas: all-in (push) sin nadie que haya subido, según cuántos quedan detrás (BTN ≈ 41 %, SB ≈ 60 %, cerca de los rangos de equilibrio a 10 BB). */
 export const PUSH = {
   8: R('66+, A9s+, KTs+, QJs, AJo+, KQo'),
   6: R('55+, A8s+, KTs+, QTs+, JTs, ATo+, KQo'),
   5: R('44+, A5s+, K9s+, QTs+, JTs, A9o+, KJo+'),
   4: R('33+, A2s+, K9s+, Q9s+, J9s+, T9s, A8o+, KTo+, QJo'),
   3: R('22+, A2s+, K7s+, Q9s+, J9s+, T9s, 98s, A5o+, KTo+, QTo+'),
-  2: R('22+, A2s+, K4s+, Q8s+, J8s+, T8s+, 98s, 87s, A2o+, K9o+, QTo+, JTo'),
-  1: R('22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 97s+, 87s, A2o+, K7o+, Q9o+, J9o+'),
+  2: R('22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 96s+, 86s+, 75s+, 65s, 54s, A2o+, K7o+, Q9o+, J9o+, T9o'),
+  1: R('22+, A2s+, K2s+, Q2s+, J4s+, T6s+, 95s+, 85s+, 74s+, 64s+, 53s+, 43s, A2o+, K2o+, Q5o+, J7o+, T7o+, 97o+, 87o'),
 };
 PUSH[7] = PUSH[8];
 PUSH.hu = PUSH[1];
@@ -108,6 +124,10 @@ const tramoDe = (detras, hu) => (hu || detras <= 3 ? 'tarde' : detras === 4 ? 'm
 const MAS_ESTRECHO = { tarde: 'medio', medio: 'temprano', temprano: 'temprano' };
 const aperturaDe = (detras, hu) => (hu ? APERTURA.hu : APERTURA[Math.min(8, Math.max(1, detras))]);
 const pushDe = (detras, hu) => (hu ? PUSH.hu : PUSH[Math.min(8, Math.max(1, detras))]);
+/** El 3-bet de la SB: la tabla + SB_EXTRA (+ SB_EXTRA_BTN si subió el BTN). */
+const tresBetSB = (t, s) => unir(t.tresBet, SB_EXTRA, s.subidor && s.subidor.detras <= 2 && !s.hu ? SB_EXTRA_BTN : NADA);
+/** ¿Mano a mano, la BB ante una subida normal? Entonces se usa ANTE_SUBIDA_HU. */
+const bbHu = (s) => s.hu && s.lugar === 'bb' && !s.grande;
 
 /**
  * Recorre las acciones de antes del flop. Para cada una guarda la situación de quien actuó
@@ -130,7 +150,8 @@ export function analizarPreflop(mano, eventos = mano.eventos) {
       else if (despues.apuestaMaxima > antes.apuestaMaxima) hizo = 'sube';
       else if (antes.jugadores.find((j) => j.asiento === ev.asiento).aPagar > 0) hizo = 'call';
       else hizo = 'check';
-      acciones.push({ indice: i, asiento: ev.asiento, hizo, hasta: despues.jugadores.find((j) => j.asiento === ev.asiento).puesto, sit });
+      const j = despues.jugadores.find((x) => x.asiento === ev.asiento);
+      acciones.push({ indice: i, asiento: ev.asiento, hizo, hasta: j.puesto, allin: j.allin, sit });
     }
     antes = despues;
   }
@@ -170,6 +191,10 @@ function situacion(mano, pos, hu, acciones, estado, asiento) {
     s.tipo = limpers ? 'limpers' : 'abrir';
     return s;
   }
+  // ¿El último que subió está all-in (y te toca pagar)? Entonces se decide por equidad
+  if (ultima.allin && ultima.asiento !== asiento && yo.aPagar > 0) {
+    s.anteAllin = { asiento: ultima.asiento, posicion: posicionDe(ultima.asiento) };
+  }
   const primera = subidas[0];
   const subidor = { asiento: primera.asiento, posicion: posicionDe(primera.asiento), detras: detrasDe(primera.asiento) };
   s.subidor = subidor;
@@ -208,6 +233,9 @@ const num = (n) => n.toLocaleString('es-ES', { maximumFractionDigits: 2 });
 /** Qué dice la tabla para la clase "cl" en la situación "s" (sin tamaños ni la regla del 40 %). */
 export function decidirPreflop(s, cl) {
   const en = (r) => r.has(cl);
+  if (s.anteAllin) {
+    return { accion: 'equidad', motivo: `${cl} ante el all-in ${de(s.anteAllin.posicion)}` };
+  }
   const desde = `${cl} desde ${art(s.posicion)}${s.posicion}`;
   const ante = s.subidor ? `${cl} en ${art(s.posicion)}${s.posicion} ante subida ${de(s.subidor.posicion)}` : desde;
 
@@ -242,11 +270,11 @@ export function decidirPreflop(s, cl) {
 
   if (s.tipo === 'subida') {
     const t = ANTE_SUBIDA[s.tramo];
-    const tres = s.lugar === 'sb' ? unir(t.tresBet, SB_EXTRA) : t.tresBet;
-    let call = s.lugar === 'sb' ? NADA : s.lugar === 'bb' ? unir(t.call, t.bb) : t.call;
+    const tres = bbHu(s) ? ANTE_SUBIDA_HU.tresBet : s.lugar === 'sb' ? tresBetSB(t, s) : t.tresBet;
+    let call = bbHu(s) ? ANTE_SUBIDA_HU.defiende : s.lugar === 'sb' ? NADA : s.lugar === 'bb' ? unir(t.call, t.bb) : t.call;
     call = menos(call, tres);
     if (s.callers > 0) call = parejasYMismoPalo(call);
-    const tramo = s.grande ? `subida grande: tabla de ${s.tramo}` : `subida de ${s.tramo}`;
+    const tramo = bbHu(s) ? 'mano a mano' : s.grande ? `subida grande: tabla de ${s.tramo}` : `subida de ${s.tramo}`;
     const mult = (s.lugar === 'posicion' ? 3 : 4) + s.callers;
     if (en(tres)) return { accion: 'subir', veces: mult, motivo: `${ante}: está en el rango de 3-bet (${tramo}, ${pct(tres)})` };
     if (en(call)) {
@@ -294,6 +322,10 @@ export function recomendarPreflop(mano, mias, eventos = mano.eventos) {
   const fichas = yo.fichas; // las que le quedan (null si no se llevan)
   const aPagar = estado.aPagar;
   const r = { sit: s, clase: cl, fuente: 'tabla', hasta: null };
+  if (d.accion === 'equidad') {
+    // Se decide con la equidad (decidirAnteAllin), cuando el worker la tenga
+    return { ...r, fuente: 'equidad', porEquidad: true, consejo: null, motivo: d.motivo, texto: `${d.motivo}: calculando tu equidad contra su rango…` };
+  }
   // ¿Ir all-in sería solo pagar? (no te llega para más, o nadie vivo puede pagar una subida)
   const puedenPagar = estado.jugadores.some((j) => j.vivo && j.asiento !== yo.asiento && !j.allin && (j.fichas === null || j.fichas > 0));
   const allinEsCall = fichas !== null && (fichas <= aPagar || !puedenPagar);
@@ -332,13 +364,30 @@ export function recomendarPreflop(mano, mias, eventos = mano.eventos) {
   return { ...r, consejo: accion, texto: `${verbo}: ${motivo}.` };
 }
 
+/**
+ * Ante un all-in: Call si tu equidad (contra el rango de quien va all-in y de los que ya han
+ * pagado) llega a las pot odds; si no, Fold. "tabla" es lo que devolvió recomendarPreflop.
+ */
+export function decidirAnteAllin(tabla, equidad, aPagar, bote) {
+  const necesitas = potOdds(aPagar, bote);
+  const p = (x) => Math.round(x * 100) + ' %';
+  const call = equidad >= necesitas;
+  const texto = call
+    ? `Call: ${tabla.motivo}, tu equidad contra su rango (${p(equidad)}) llega a lo que necesitas por las pot odds (${p(necesitas)}).`
+    : `Fold: ${tabla.motivo}, tu equidad contra su rango (${p(equidad)}) no llega a lo que necesitas por las pot odds (${p(necesitas)}).`;
+  return { ...tabla, consejo: call ? 'call' : 'fold', texto };
+}
+
 // ---------------------------------------------------------------- Rangos de los rivales
 
-/** El rango que se supone a quien hizo "hizo" (sube, call o check) en la situación "s". */
-export function rangoDeAccion(s, hizo) {
+/**
+ * El rango que se supone a quien hizo "hizo" (sube, call o check) en la situación "s".
+ * allin: la subida fue all-in (con muchas fichas, abrir all-in se toma como su rango de push).
+ */
+export function rangoDeAccion(s, hizo, allin = false) {
   let r = null;
   if (hizo === 'check') return BB_PASA();
-  if (s.corto && hizo === 'sube') {
+  if ((s.corto || (allin && (s.tipo === 'abrir' || s.tipo === 'limpers'))) && hizo === 'sube') {
     r = s.tipo === 'abrir' || s.tipo === 'limpers' ? pushDe(s.detras, s.hu)
       : s.tipo === 'subida' ? CORTO_ANTE_SUBIDA[s.tramo] : CORTO_ANTE_3BET;
   } else if (s.tipo === 'abrir') {
@@ -347,11 +396,11 @@ export function rangoDeAccion(s, hizo) {
     r = hizo === 'sube' ? aperturaDe(s.detras + 1, s.hu && s.lugar !== 'bb') : LIMP_RIVAL();
   } else if (s.tipo === 'subida') {
     const t = ANTE_SUBIDA[s.tramo];
-    const tres = s.lugar === 'sb' ? unir(t.tresBet, SB_EXTRA) : t.tresBet;
+    const tres = bbHu(s) ? ANTE_SUBIDA_HU.tresBet : s.lugar === 'sb' ? tresBetSB(t, s) : t.tresBet;
     if (hizo === 'sube') r = tres;
     else {
       // La SB no debería pagar: se le supone el call de la posición
-      r = menos(s.lugar === 'bb' ? unir(t.call, t.bb) : t.call, tres);
+      r = menos(bbHu(s) ? ANTE_SUBIDA_HU.defiende : s.lugar === 'bb' ? unir(t.call, t.bb) : t.call, tres);
       if (s.callers > 0) r = parejasYMismoPalo(r);
     }
   } else if (s.tipo === 'tres-bet') {
@@ -379,7 +428,7 @@ export function rangosDeRivales(mano, yo, eventos = mano.eventos) {
   return vivos.map((asiento) => {
     const ultima = [...a.acciones].reverse().find((x) => x.asiento === asiento && x.hizo !== 'fold');
     if (!ultima) return { asiento, rango: null, motivo: 'sin acción antes del flop' };
-    const rango = rangoDeAccion(ultima.sit, ultima.hizo);
+    const rango = rangoDeAccion(ultima.sit, ultima.hizo, ultima.allin);
     return { asiento, rango, motivo: `${QUE_HIZO[ultima.hizo]} desde ${art(ultima.sit.posicion)}${ultima.sit.posicion} (${pct(rango)})` };
   });
 }
