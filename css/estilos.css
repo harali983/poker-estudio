@@ -516,6 +516,23 @@ h2 {
 .carta-mini.flop-ultima { margin-right: 4px; } /* separa el flop del turn y el turn del river */
 .carta-mini.turn { margin-right: 4px; }
 
+/* Te toca: la recomendación básica, encima del estado */
+.te-toca { display: flex; flex-direction: column; gap: 3px; padding: 6px 10px; border: 1px solid var(--borde); border-radius: 10px; background: var(--tarjeta); }
+.te-toca[hidden] { display: none; }
+.te-toca p { margin: 0; }
+.te-toca-cabecera { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 8px; font-size: 0.85rem; }
+.consejo { font-size: 1.1rem; }
+.consejo-fold { color: #ffc2c2; }
+.consejo-call { color: #9cc9ff; }
+.consejo-apostar, .consejo-subir { color: #ffe0a8; }
+.consejo-check { color: var(--texto); }
+.te-toca-texto { font-size: 0.9rem; line-height: 1.3; }
+.aviso-optimista { font-size: 0.78rem; line-height: 1.25; color: var(--texto-suave); }
+/* En el river y ante apuestas grandes la equidad contra manos al azar se equivoca más */
+.aviso-optimista.destacado { color: var(--malo); font-weight: 600; }
+/* El botón de la acción recomendada, con un borde (la decisión es tuya) */
+.accion.recomendado { box-shadow: 0 0 0 3px var(--acento); }
+
 /* Showdown: una fila por jugador que llega → [🏆 Ana (BTN) · 5] [carta][carta] */
 .showdown { display: flex; flex-direction: column; gap: 6px; }
 .showdown[hidden] { display: none; }

@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.2.15</p>
+    <p class="version">Versión 0.2.16</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -209,6 +209,12 @@
         <p id="mano-tu-jugada" class="tu-jugada tu-jugada-barra"></p>
         <!-- Showdown: quién gana (uno o varios) y las cartas que mostró cada uno (las pinta pantalla-mano.js) -->
         <div id="showdown" class="showdown" hidden></div>
+        <!-- Te toca: la recomendación básica (recomendacion.js). Solo cuando te toca a ti -->
+        <div id="te-toca" class="te-toca" hidden aria-live="polite">
+          <p class="te-toca-cabecera"><strong id="te-toca-consejo" class="consejo"></strong> <span id="te-toca-datos" class="texto-suave"></span></p>
+          <p id="te-toca-texto" class="te-toca-texto"></p>
+          <p id="te-toca-aviso" class="aviso-optimista"></p>
+        </div>
         <p id="mano-estado" class="mano-estado" aria-live="polite"></p>
         <!-- Deshacer va encima de las acciones, no en la fila del pulgar: así no se toca sin querer -->
         <div class="fila-deshacer">

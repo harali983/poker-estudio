@@ -27,11 +27,14 @@ import { manoEnCurso, empezarMano, guardarMano, terminarMano } from './manos.js'
 import { calcularFinal, avisoBotes } from './final.js';
 import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
-import { crearTeclado, pasoDeCiegas, accionDeCantidad } from './teclado.js';
+import { crearTeclado, pasoDeCiegas, accionDeCantidad, tamanoRapido } from './teclado.js';
+import { recomendar, spr, AVISO_OPTIMISTA, NOMBRE_CONSEJO } from './recomendacion.js';
 import { ErrorBD } from './db.js';
 import { mostrarError } from './avisos.js';
 
 const NOMBRE_CALLE = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
+const MESA_POR_CALLE = { preflop: 0, flop: 3, turn: 4, river: 5 };
+const BOTON_DE_CONSEJO = { fold: 'btn-fold', check: 'btn-check', call: 'btn-call', apostar: 'btn-apostar', subir: 'btn-subir' };
 const BOTONES = ['btn-fold', 'btn-check', 'btn-call', 'btn-apostar', 'btn-subir',
   'btn-cartas', 'btn-siguiente', 'btn-empezar-mano'];
 
@@ -75,10 +78,11 @@ export function iniciarMano() {
   // ---- Guardar y pintar ----
   // Guarda la mano con los eventos nuevos y solo entonces la da por buena y la pinta.
   // Si no se puede guardar, la mano se queda como estaba y se avisa.
-  async function cambiarEventos(eventos) {
+  // "extra": otros campos de la mano que se guardan a la vez (p. ej. las decisiones)
+  async function cambiarEventos(eventos, extra = {}) {
     if (ocupado) return;
     ocupado = true;
-    const nueva = { ...mano, eventos };
+    const nueva = { ...mano, eventos, ...extra };
     try {
       await guardarMano(nueva);
       mano = nueva;
@@ -93,7 +97,7 @@ export function iniciarMano() {
     if (!mano) return;
     const estado = calcularEstado(mano);
     if (estado.fase !== 'accion') return;
-    cambiarEventos([...mano.eventos, eventoDeAccion(estado, nombre)]);
+    cambiarEventos([...mano.eventos, eventoDeAccion(estado, nombre)], conDecision(estado));
   }
   $('btn-fold').addEventListener('click', () => accion('fold'));
   $('btn-check').addEventListener('click', () => accion('check'));
@@ -116,7 +120,7 @@ export function iniciarMano() {
       bb: mano.ciegas.bb,
       alAnotar(hasta, allin) {
         if (!mano || mano.eventos.length !== eventosAntes) return; // la mano cambió mientras tanto
-        cambiarEventos([...mano.eventos, eventoDeAccion(estado, accionDeCantidad(estado, allin), hasta)]);
+        cambiarEventos([...mano.eventos, eventoDeAccion(estado, accionDeCantidad(estado, allin), hasta)], conDecision(estado));
       },
     });
   }
@@ -295,7 +299,10 @@ export function iniciarMano() {
   }
 
   $('btn-deshacer').addEventListener('click', () => {
-    if (mano && puedeDeshacer(mano.eventos)) cambiarEventos(deshacer(mano.eventos));
+    if (!mano || !puedeDeshacer(mano.eventos)) return;
+    const eventos = deshacer(mano.eventos);
+    // La decisión de una acción deshecha se quita con ella
+    cambiarEventos(eventos, { decisiones: (mano.decisiones || []).filter((d) => d.evento < eventos.length) });
   });
 
   $('btn-siguiente').addEventListener('click', async () => {
@@ -377,6 +384,7 @@ export function iniciarMano() {
     $('btn-deshacer').hidden = true;
     hojaCartas.cerrar();
     pintarCartas();
+    pintarTeToca(null);
   }
 
   function pintarMano() {
@@ -408,6 +416,7 @@ export function iniciarMano() {
     $('mano-calle').textContent = NOMBRE_CALLE[estado.calle];
     $('mano-bote').textContent = 'Bote ' + formatear(estado.bote);
     pintarTuJugada(estado);
+    pintarTeToca(estado);
 
     // Qué pasa ahora
     let texto = '';
@@ -456,6 +465,122 @@ export function iniciarMano() {
     $('btn-deshacer').hidden = false;
     $('btn-deshacer').disabled = !puedeDeshacer(mano.eventos);
     pintarCartas();
+  }
+
+  // ---- Te toca: equidad, pot odds, SPR y la recomendación (recomendacion.js) ----
+  // La equidad la calcula el mismo worker que la calculadora (contra manos al azar, tantas como
+  // rivales vivos). El resultado se guarda por situación (tus cartas, la mesa y los rivales):
+  // si vuelve a tocarte sin que cambie nada, no se recalcula.
+  let calculo = null; // { clave, worker, resultado }
+
+  function situacion(estado) {
+    if (!mano || estado.fase !== 'accion' || !esYo(estado.turno)) return null;
+    const mias = mano.misCartas || [];
+    if (mias.length !== 2) return { falta: 'Pon tus cartas (abajo, "Tú") para ver la recomendación.' };
+    if (estado.mesa.length !== MESA_POR_CALLE[estado.calle]) return { falta: 'Faltan cartas de la mesa por anotar: sin recomendación.' };
+    const rivales = estado.vivos.length - 1;
+    return { clave: JSON.stringify([mias, estado.mesa, rivales]), mias, mesa: estado.mesa, rivales };
+  }
+
+  function asegurarCalculo(sit) {
+    if (calculo && calculo.clave === sit.clave) return;
+    pararCalculo();
+    const worker = new Worker(new URL('./equidad.worker.js', import.meta.url), { type: 'module' });
+    const este = { clave: sit.clave, worker, resultado: null };
+    calculo = este;
+    worker.onmessage = (e) => {
+      if (calculo !== este) return;
+      este.resultado = e.data;
+      if (e.data.terminado) { worker.terminate(); este.worker = null; }
+      if (mano) pintarTeToca(calcularEstado(mano)); // solo el panel: no cierra el teclado ni la hoja
+    };
+    worker.onerror = (error) => {
+      console.error('Error en el cálculo de la equidad:', error);
+      if (calculo === este) { este.worker = null; este.error = true; if (mano) pintarTeToca(calcularEstado(mano)); }
+    };
+    worker.postMessage({ mias: sit.mias, mesa: sit.mesa, rivales: sit.rivales });
+  }
+
+  function pararCalculo() {
+    if (calculo && calculo.worker) calculo.worker.terminate();
+    calculo = null;
+  }
+
+  // La recomendación para la situación actual, o null si todavía no hay equidad
+  function recomendacionActual(estado) {
+    const sit = situacion(estado);
+    if (!sit || sit.falta || !calculo || calculo.clave !== sit.clave || !calculo.resultado) return null;
+    const res = calculo.resultado;
+    const o = opciones(estado);
+    const r = recomendar({
+      equidad: res.equidad,
+      aPagar: estado.aPagar,
+      bote: estado.bote,
+      rivales: sit.rivales,
+      calle: estado.calle,
+      apuestaMaxima: estado.apuestaMaxima,
+      bb: mano.ciegas.bb,
+      puedeSubir: o.apostar || o.subir,
+      hasta: tamanoRapido(estado, 2 / 3, pasoDeCiegas(mano.ciegas)).hasta,
+    });
+    return { ...r, equidad: res.equidad, margen: res.margen, manos: res.manos, terminado: res.terminado, rivales: sit.rivales };
+  }
+
+  // Lo que se te recomendó, para guardarlo con tu acción (mano.decisiones; se repasa en la Fase 3)
+  function conDecision(estado) {
+    const r = recomendacionActual(estado);
+    if (!r) return {};
+    const evento = mano.eventos.length;
+    const decision = { evento, equidad: r.equidad, potOdds: r.potOdds, consejo: r.consejo, texto: r.texto, manos: r.manos };
+    if (r.hasta !== null) decision.hasta = r.hasta;
+    return { decisiones: [...(mano.decisiones || []).filter((d) => d.evento < evento), decision] };
+  }
+
+  function pintarTeToca(estado) {
+    const panel = $('te-toca');
+    for (const id of Object.values(BOTON_DE_CONSEJO)) $(id).classList.remove('recomendado');
+    const sit = estado ? situacion(estado) : null;
+    panel.hidden = !sit;
+    if (!sit) return;
+
+    const consejo = $('te-toca-consejo');
+    const datos = $('te-toca-datos');
+    const texto = $('te-toca-texto');
+    const aviso = $('te-toca-aviso');
+    const yo = estado.jugadores.find((j) => esYo(j.asiento));
+    const s = spr(estado, yo.asiento);
+    const textoSpr = s === null ? '' : 'SPR ' + s.toLocaleString('es-ES', { maximumFractionDigits: 1 });
+    consejo.className = 'consejo';
+    aviso.textContent = AVISO_OPTIMISTA;
+    aviso.classList.remove('destacado');
+
+    if (sit.falta) {
+      consejo.textContent = 'Te toca';
+      datos.textContent = textoSpr;
+      texto.textContent = sit.falta;
+      return;
+    }
+    asegurarCalculo(sit);
+    const r = recomendacionActual(estado);
+    if (!r) {
+      consejo.textContent = 'Te toca';
+      datos.textContent = textoSpr;
+      texto.textContent = calculo && calculo.error ? 'No se ha podido calcular la equidad.' : 'Calculando tu equidad…';
+      return;
+    }
+    consejo.textContent = NOMBRE_CONSEJO[r.consejo];
+    consejo.classList.add('consejo-' + r.consejo);
+    const pct = (x) => Math.round(x * 100) + ' %';
+    datos.textContent = [
+      `Equidad ${pct(r.equidad)}`,
+      r.potOdds > 0 ? `necesitas ${pct(r.potOdds)}` : '',
+      `${r.rivales} ${r.rivales === 1 ? 'rival' : 'rivales'}`,
+      textoSpr,
+      r.terminado ? '' : 'calculando…',
+    ].filter(Boolean).join(' · ');
+    texto.textContent = r.texto;
+    aviso.classList.toggle('destacado', r.destacar);
+    $(BOTON_DE_CONSEJO[r.consejo]).classList.add('recomendado');
   }
 
   // Qué mano tienes, debajo de la fila de cartas (si estás en la mano, vivo y con tus 2 cartas).
@@ -683,7 +808,7 @@ export function iniciarMano() {
   // Una cantidad a medio teclear no es una acción: si sales, se descarta.
   return {
     alEntrar: cargar,
-    alSalir: () => { teclado.cerrar(); hojaCartas.cerrar(); },
+    alSalir: () => { teclado.cerrar(); hojaCartas.cerrar(); pararCalculo(); },
   };
 }
 
