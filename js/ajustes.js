@@ -6,16 +6,12 @@ import { interpretarNumero } from './numeros.js';
 
 export const AJUSTES_POR_DEFECTO = {
   ciegas: { sb: 1, bb: 2, ante: 0 },  // ciegas por defecto de una mesa nueva
-  unidad: 'fichas',                   // mostrar cantidades en 'fichas' o en 'bb'
 };
 
 /** Lee todos los ajustes; lo que no esté guardado toma el valor por defecto. */
 export async function leerAjustes() {
-  const [ciegas, unidad] = await Promise.all([
-    bd.leerAjuste('ciegas', AJUSTES_POR_DEFECTO.ciegas),
-    bd.leerAjuste('unidad', AJUSTES_POR_DEFECTO.unidad),
-  ]);
-  return { ciegas, unidad };
+  const ciegas = await bd.leerAjuste('ciegas', AJUSTES_POR_DEFECTO.ciegas);
+  return { ciegas };
 }
 
 export function guardarAjuste(clave, valor) {

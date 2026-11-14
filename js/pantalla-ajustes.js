@@ -1,4 +1,5 @@
-// pantalla-ajustes.js: ciegas por defecto, unidad de las cantidades y estado del almacenamiento.
+// pantalla-ajustes.js: ciegas por defecto y estado del almacenamiento.
+// (Mostrar las cantidades en BB se quitó en la v0.3.0: queda para la Fase 3.)
 // Los cambios se guardan solos (no hay botón "Guardar").
 
 import { estadoPersistencia, espacioUsado, ErrorBD } from './db.js';
@@ -11,7 +12,6 @@ export function iniciarAjustes() {
   const campoAnte = document.getElementById('ajuste-ante');
   const avisoCiegas = document.getElementById('ajuste-ciegas-aviso');
   const textoGuardado = document.getElementById('ajustes-guardado');
-  const botonesUnidad = [...document.querySelectorAll('#pantalla-ajustes [data-unidad]')];
 
   let temporizadorCiegas = null;   // espera corta mientras escribes antes de guardar
   let temporizadorGuardado = null;
@@ -22,7 +22,6 @@ export function iniciarAjustes() {
       campoSb.value = numeroATexto(ajustes.ciegas.sb);
       campoBb.value = numeroATexto(ajustes.ciegas.bb);
       campoAnte.value = ajustes.ciegas.ante ? numeroATexto(ajustes.ciegas.ante) : '';
-      pintarUnidad(ajustes.unidad);
     })
     .catch(avisarFallo);
 
@@ -49,22 +48,6 @@ export function iniciarAjustes() {
     avisoCiegas.hidden = !texto;
     avisoCiegas.textContent = texto || '';
     avisoCiegas.classList.toggle('aviso-campo-error', Boolean(esError));
-  }
-
-  // ---- Unidad: fichas o ciegas grandes ----
-  for (const boton of botonesUnidad) {
-    boton.addEventListener('click', () => {
-      pintarUnidad(boton.dataset.unidad);
-      guardar('unidad', boton.dataset.unidad);
-    });
-  }
-
-  function pintarUnidad(unidad) {
-    for (const boton of botonesUnidad) {
-      const elegido = boton.dataset.unidad === unidad;
-      boton.classList.toggle('elegido', elegido);
-      boton.setAttribute('aria-checked', String(elegido));
-    }
   }
 
   // ---- Guardar y avisar ----
