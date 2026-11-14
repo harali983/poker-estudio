@@ -30,7 +30,9 @@ import {
 import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
 import { crearTeclado, pasoDeCiegas, accionDeCantidad, tamanoRapido } from './teclado.js';
-import { recomendar, spr, potOdds, AVISO_RANGOS, AVISO_PREFLOP, NOMBRE_CONSEJO } from './recomendacion.js';
+import {
+  recomendar, spr, potOdds, AVISO_RANGOS, AVISO_PREFLOP, NOMBRE_CONSEJO, NOTA_TABLA_EQUIDAD, contradiceEquidad,
+} from './recomendacion.js';
 import { recomendarPreflop, rangosDeRivales, decidirAnteAllin } from './preflop.js';
 import { combosDeRango } from './rangos.js';
 import { ErrorBD } from './db.js';
@@ -545,7 +547,7 @@ export function iniciarMano() {
         return { ...d, potOdds: potOdds(estado.aPagar, estado.bote), destacar: false,
           equidad: res.equidad, manos: res.manos, terminado: res.terminado, rivales: sit.rivales };
       }
-      return { ...sit.tabla, potOdds: potOdds(estado.aPagar, estado.bote), destacar: false,
+      return { ...sit.tabla, deTabla: true, potOdds: potOdds(estado.aPagar, estado.bote), destacar: false,
         equidad: res ? res.equidad : null, manos: res ? res.manos : 0, terminado: res ? res.terminado : true, rivales: sit.rivales };
     }
     if (!res) return null;
@@ -586,6 +588,8 @@ export function iniciarMano() {
     const datos = $('te-toca-datos');
     const texto = $('te-toca-texto');
     const aviso = $('te-toca-aviso');
+    const nota = $('te-toca-nota');
+    nota.hidden = true;
     const yo = estado.jugadores.find((j) => esYo(j.asiento));
     const s = spr(estado, yo.asiento);
     const textoSpr = s === null ? '' : 'SPR ' + s.toLocaleString('es-ES', { maximumFractionDigits: 1 });
@@ -619,6 +623,9 @@ export function iniciarMano() {
       r.terminado ? '' : 'calculando…',
     ].filter(Boolean).join(' · ');
     texto.textContent = r.texto;
+    // Las tablas dicen Fold aunque la equidad llegue: se explica por qué
+    nota.textContent = NOTA_TABLA_EQUIDAD;
+    nota.hidden = !contradiceEquidad(r);
     aviso.classList.toggle('destacado', r.destacar);
     // All-in se anota con el teclado de Subir (o con Call, si no se puede subir: p. ej. si una
     // subida all-in incompleta no te reabre la acción)

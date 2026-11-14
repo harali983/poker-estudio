@@ -71,7 +71,9 @@
       decidirShowdown, puedeHacerMuck, motivoShowdown,
     } from '../js/final.js';
     import { describirMano, textoMano, nombreJugada } from '../js/describir.js';
-    import { recomendar, potOdds, parteJusta, spr, destacarAviso, MARGEN_POT_ODDS, MARGEN_PARTE } from '../js/recomendacion.js';
+    import {
+      recomendar, potOdds, parteJusta, spr, destacarAviso, MARGEN_POT_ODDS, MARGEN_PARTE, contradiceEquidad,
+    } from '../js/recomendacion.js';
     import {
       clase, leerRango, numCombos, combosDe, combosDeRango, contarCombos, porcentaje, top, CLASES, ORDEN, TODAS,
     } from '../js/rangos.js';
@@ -973,6 +975,16 @@
         const okR = (bien, texto, detalle = '') => anotar('lista-recomendacion', bien, texto, detalle);
         const base = { aPagar: 10, bote: 30, rivales: 2, calle: 'flop', apuestaMaxima: 10, bb: 2, puedeSubir: true, hasta: 37 };
         const rec = (cambios) => recomendar({ ...base, ...cambios });
+
+        // Nota cuando las tablas dicen Fold aunque la equidad llegue (v0.3.2)
+        const t76 = { deTabla: true, consejo: 'fold', equidad: 0.40, potOdds: 0.33 };
+        okR(contradiceEquidad(t76)
+          && !contradiceEquidad({ ...t76, equidad: 0.30 })
+          && !contradiceEquidad({ ...t76, consejo: 'call' })
+          && !contradiceEquidad({ ...t76, deTabla: false })
+          && !contradiceEquidad({ ...t76, equidad: null })
+          && !contradiceEquidad({ ...t76, potOdds: 0 }),
+          'Antes del flop: la nota "la equidad supone ver las 5 cartas gratis…" sale solo si la tabla dice Fold y la equidad (40 %) supera lo que necesitas (33 %); no si no llega, si no es Fold, ante un all-in, sin equidad o sin nada que pagar');
 
         okR(Math.abs(potOdds(50, 100) - 1 / 3) < 1e-9 && potOdds(10, 30) === 0.25 && potOdds(0, 30) === 0,
           'Pot odds = a pagar / (bote + a pagar): 50 con bote 100 → 33 %; 10 con 30 → 25 %; sin nada que pagar → 0');

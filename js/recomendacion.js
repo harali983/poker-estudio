@@ -102,3 +102,15 @@ export function recomendar(datos) {
 
 /** Nombre del consejo para el botón grande del panel. */
 export const NOMBRE_CONSEJO = { fold: 'Fold', check: 'Check', call: 'Call', apostar: 'Apostar', subir: 'Subir', allin: 'All-in' };
+
+/**
+ * Antes del flop, el consejo de las tablas puede ser Fold aunque tu equidad supere las pot odds
+ * (p. ej. 76s en la SB ante subida del BTN: 40 % contra el 33 % que necesitas). Entonces se añade
+ * esta nota. r: { deTabla, consejo, equidad, potOdds } (deTabla = el consejo sale de las tablas,
+ * no de la comparación ante un all-in).
+ */
+export const NOTA_TABLA_EQUIDAD = 'La equidad supone ver las 5 cartas gratis; fuera de posición y con jugadores detrás, una mano especulativa no la aprovecha.';
+export function contradiceEquidad(r) {
+  return Boolean(r && r.deTabla) && r.consejo === 'fold' && r.equidad !== null && r.equidad !== undefined
+    && r.potOdds > 0 && r.equidad >= r.potOdds;
+}
