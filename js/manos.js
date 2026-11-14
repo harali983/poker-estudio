@@ -30,6 +30,14 @@ export async function empezarMano(partida) {
   return mano;
 }
 
+/**
+ * ¿Hay que pedir tus cartas al empezar la mano? Solo si juegas esta mano (estás en la
+ * foto de jugadores) y aún no están puestas. Si no juegas, no se pide nada.
+ */
+export function pedirMisCartas(mano) {
+  return mano.jugadores.some((j) => j.jugadorId === 'yo') && !(mano.misCartas || []).length;
+}
+
 /** Guarda la mano tal y como está (después de cada acción o de Deshacer). */
 export function guardarMano(mano) {
   return bd.guardar('manos', mano);

@@ -23,7 +23,7 @@ import { VALORES_TEXTO, SIMBOLOS, NOMBRES_PALOS, valorDe, paloDe } from './carta
 import { calcularPosiciones } from './posiciones.js';
 import { posicionEnMesa } from './mesa.js';
 import { partidaEnCurso, nombresDeJugadores } from './partidas.js';
-import { manoEnCurso, empezarMano, guardarMano, terminarMano } from './manos.js';
+import { manoEnCurso, empezarMano, guardarMano, terminarMano, pedirMisCartas } from './manos.js';
 import { calcularFinal, faltanGanadores, ganadoresPorBote } from './final.js';
 import { describirMano } from './describir.js';
 import { pintarJugada } from './pantalla-calculadora.js';
@@ -141,11 +141,11 @@ export function iniciarMano() {
     if (estado.fase === 'cartas') abrirCalle(estado.faltan, 0);
   });
 
-  function abrirMias(i) {
+  function abrirMias(i, { alEmpezar = false } = {}) {
     const actuales = [...(mano.misCartas || [])];
     // Una carta ya puesta se cambia ella sola; si falta alguna, se rellenan en orden
     const soloUna = i < actuales.length && actuales.length === 2;
-    eligiendo = { tipo: 'mias', cartas: actuales, indice: soloUna ? i : actuales.length, soloUna };
+    eligiendo = { tipo: 'mias', cartas: actuales, indice: soloUna ? i : actuales.length, soloUna, alEmpezar };
     abrirHoja();
   }
 
@@ -220,7 +220,9 @@ export function iniciarMano() {
     const botones = [];
     if (eligiendo.tipo === 'mias') {
       botones.push({ texto: 'Quitar', desactivado: !(mano.misCartas || []).length, alTocar: quitarMias });
-      botones.push({ texto: 'Listo', acento: true, alTocar: () => hojaCartas.cerrar() });
+      // Al empezar la mano, "Saltar" para no ponerlas ahora (luego se tocan sus huecos)
+      if (eligiendo.alEmpezar) botones.push({ texto: 'Saltar', alTocar: () => hojaCartas.cerrar() });
+      else botones.push({ texto: 'Listo', acento: true, alTocar: () => hojaCartas.cerrar() });
     } else if (eligiendo.tipo === 'mostradas') {
       const asiento = eligiendo.asiento;
       botones.push({ texto: 'Quitar', desactivado: !mostradasDe(asiento).length,
@@ -338,6 +340,8 @@ export function iniciarMano() {
     }
     ocupado = false;
     pintar();
+    // Como al poner el flop: se abre la hoja para tus cartas (si juegas esta mano)
+    if (mano && pedirMisCartas(mano)) abrirMias(0, { alEmpezar: true });
   });
 
   // ---- Pintar ----

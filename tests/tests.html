@@ -65,7 +65,7 @@
       CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer, eventoDeAccion, eventoDeMesa,
       cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
     } from '../js/motor.js';
-    import { cerrarMano } from '../js/manos.js';
+    import { cerrarMano, pedirMisCartas } from '../js/manos.js';
     import { calcularFinal, repartir, netos, unidadDeFichas, calcularBotes, faltanGanadores } from '../js/final.js';
     import { describirMano, textoMano } from '../js/describir.js';
     import { recomendar, potOdds, parteJusta, spr, destacarAviso, MARGEN_POT_ODDS, MARGEN_PARTE } from '../js/recomendacion.js';
@@ -578,6 +578,15 @@
       const pFuera = { ...partidaDe(6, 0, { fuera: [1] }), manosJugadas: 0 };
       const mFuera2 = jugar(crearMano(pFuera, { id: 'm1', numero: 1, fecha: 'x' }), ['4 fold', '5 fold', '0 fold', '2 fold']);
       ok(cerrarMano(mFuera2, pFuera, calcularEstado(mFuera2)).partida.boton === 2, 'Cerrar la mano: el botón se salta al que no juega (0 → 2)');
+
+      // Al empezar la mano se piden tus cartas solo si juegas y aún no están (v0.3.1)
+      const mJuego = crearMano(partidaDe(6, 0), { id: 'mc', numero: 1, fecha: 'x' });
+      const mNoJuego = crearMano(partidaDe(6, 0, { fuera: [0] }), { id: 'mn', numero: 1, fecha: 'x' });
+      ok(pedirMisCartas(mJuego) === true
+        && pedirMisCartas({ ...mJuego, misCartas: tc('As Kd') }) === false
+        && pedirMisCartas(mNoJuego) === false,
+        'Empezar mano: se abre la hoja de tus cartas si juegas; no si ya están puestas ni si no estás sentado en la mano',
+        [pedirMisCartas(mJuego), pedirMisCartas({ ...mJuego, misCartas: tc('As Kd') }), pedirMisCartas(mNoJuego)].join(' · '));
 
       // ---- Fin de la mano y participaciones (final.js, estadisticas.js) — paso 9 ----
       {
