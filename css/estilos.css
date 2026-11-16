@@ -655,3 +655,35 @@ h2 {
 .fila-mano.no-jugaba .mano-res { font-weight: 400; font-size: 0.85rem; }
 .grupo-resultado.positivo, .mano-res.positivo { color: var(--acento); }
 .grupo-resultado.negativo, .mano-res.negativo { color: var(--malo); }
+/* Filtros de Mis manos */
+.filtros summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.filtros summary::-webkit-details-marker { display: none; }
+.filtros summary::before { content: "▸"; color: var(--texto-suave); transition: transform 0.15s; }
+.filtros[open] summary::before { transform: rotate(90deg); }
+.filtros-activos { padding: 2px 8px; border-radius: 10px; background: rgba(46, 204, 113, 0.15); color: var(--acento); font-size: 0.8rem; font-weight: 600; }
+.filtros .fila.campos { align-items: flex-start; }
+.campos select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1.1rem; /* 16 px o más: si no, el iPhone hace zoom */
+}
+.campo-cartas { margin-top: 12px; }
+.campo-cartas label { display: flex; flex-direction: column; gap: 4px; }
+.filtros .boton-ancho { margin-top: 12px; }
+.manos-contador { margin: 4px 0 8px; font-size: 0.9rem; }
+@media (prefers-reduced-motion: reduce) { .filtros summary::before { transition: none; } }

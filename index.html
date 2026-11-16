@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.3.3</p>
+    <p class="version">Versión 0.3.4</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -282,6 +282,37 @@
       <p><strong>Todavía no hay manos.</strong></p>
       <p class="texto-suave">Aquí aparecen las manos que cierras en <a href="#jugar">Jugar</a>, agrupadas por partida.</p>
     </div>
+    <!-- Filtros (pantalla-manos.js; la lógica está en historial.js). Se aplican al momento -->
+    <details id="manos-filtros" class="tarjeta filtros" hidden>
+      <summary>
+        <span>Filtros</span>
+        <span id="filtros-activos" class="filtros-activos" hidden>activos</span>
+      </summary>
+      <div class="fila campos">
+        <label>Posición
+          <select id="filtro-posicion"><option value="">Todas</option></select>
+        </label>
+        <label>Resultado
+          <select id="filtro-resultado">
+            <option value="">Todos</option>
+            <option value="ganadas">Ganadas</option>
+            <option value="perdidas">Perdidas</option>
+            <option value="cero">Sin cambio</option>
+          </select>
+        </label>
+      </div>
+      <div class="campos campo-cartas">
+        <label>Cartas
+          <input id="filtro-cartas" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 placeholder="AK, AKs, QQ, parejas…">
+        </label>
+      </div>
+      <p id="filtro-cartas-aviso" class="aviso-campo" hidden>No entiendo esas cartas. Prueba con AK, AKs, AKo, QQ, A, parejas o suited.</p>
+      <label class="interruptor"><input id="filtro-showdown" type="checkbox"> Solo manos en las que llegué al showdown</label>
+      <label class="interruptor"><input id="filtro-no-seguiste" type="checkbox"> Solo manos en las que no seguí la recomendación</label>
+      <button id="filtros-quitar" type="button" class="boton boton-ancho" hidden>Quitar filtros</button>
+    </details>
+    <p id="manos-contador" class="manos-contador texto-suave" hidden></p>
     <div id="manos-lista" class="manos-lista"></div>
   </section>
 

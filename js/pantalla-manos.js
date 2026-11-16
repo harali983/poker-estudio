@@ -1,14 +1,32 @@
-// pantalla-manos.js: "Mis manos". Lista de las manos cerradas, agrupadas por partida.
-// La lógica (resumen de cada mano, agrupar y sumar) está en historial.js, con tests.
+// pantalla-manos.js: "Mis manos". Lista de las manos cerradas, agrupadas por partida, con filtros.
+// La lógica (resumen de cada mano, agrupar, sumar y filtrar) está en historial.js, con tests.
 // Aquí solo se lee la base de datos y se pinta.
+//
+// Los filtros se aplican al momento y se recuerdan mientras la app está abierta (al volver
+// de otra pantalla siguen puestos). No se guardan en la base de datos.
 
 import { bd } from './db.js';
-import { agruparPorPartida } from './historial.js';
+import {
+  agruparPorPartida, filtrarGrupos, filtroDeCartas, hayFiltros, posicionesUsadas, SIN_FILTROS,
+} from './historial.js';
 import { VALORES_TEXTO, SIMBOLOS, valorDe, paloDe } from './cartas.js';
 
 export function iniciarManos() {
-  const lista = document.getElementById('manos-lista');
-  const vacio = document.getElementById('manos-vacio');
+  const $ = (id) => document.getElementById(id);
+  const lista = $('manos-lista');
+  const vacio = $('manos-vacio');
+  const panel = $('manos-filtros');
+  const contador = $('manos-contador');
+  const campos = {
+    posicion: $('filtro-posicion'),
+    resultado: $('filtro-resultado'),
+    cartas: $('filtro-cartas'),
+    showdown: $('filtro-showdown'),
+    noSeguiste: $('filtro-no-seguiste'),
+  };
+
+  let grupos = [];                    // todas las manos, agrupadas (se leen al entrar)
+  let filtros = { ...SIN_FILTROS };
 
   async function actualizar() {
     let manos = [], partidas = [];
@@ -17,10 +35,60 @@ export function iniciarManos() {
     } catch {
       return; // app.js ya muestra el aviso de la base de datos
     }
-    const grupos = agruparPorPartida(manos, partidas);
-    vacio.hidden = grupos.length > 0;
-    lista.replaceChildren(...grupos.map(pintarGrupo));
+    grupos = agruparPorPartida(manos, partidas);
+    rellenarPosiciones();
+    pintar();
   }
+
+  // El desplegable de posición solo ofrece las posiciones que aparecen en tus manos
+  function rellenarPosiciones() {
+    const usadas = posicionesUsadas(grupos);
+    if (filtros.posicion && !usadas.includes(filtros.posicion)) usadas.push(filtros.posicion);
+    campos.posicion.replaceChildren(new Option('Todas', ''), ...usadas.map((p) => new Option(p, p)));
+    campos.posicion.value = filtros.posicion;
+  }
+
+  function pintar() {
+    const hayManos = grupos.length > 0;
+    vacio.hidden = hayManos;
+    panel.hidden = !hayManos;
+    contador.hidden = !hayManos;
+
+    const activos = hayFiltros(filtros);
+    const cartasMal = filtroDeCartas(filtros.cartas) === null;
+    $('filtros-activos').hidden = !activos;
+    $('filtros-quitar').hidden = !activos;
+    $('filtro-cartas-aviso').hidden = !cartasMal;
+
+    const r = filtrarGrupos(grupos, filtros);
+    contador.textContent = activos
+      ? `${r.vistas} de ${r.total} ${r.total === 1 ? 'mano' : 'manos'}`
+      : `${r.total} ${r.total === 1 ? 'mano' : 'manos'}`;
+    lista.replaceChildren(...r.grupos.map(pintarGrupo));
+    if (hayManos && !r.vistas) lista.append(el('p', 'tarjeta texto-suave', 'Ninguna mano cumple los filtros.'));
+  }
+
+  function leerCampos() {
+    filtros = {
+      posicion: campos.posicion.value,
+      resultado: campos.resultado.value,
+      cartas: campos.cartas.value,
+      showdown: campos.showdown.checked,
+      noSeguiste: campos.noSeguiste.checked,
+    };
+    pintar();
+  }
+  for (const c of Object.values(campos)) c.addEventListener(c.tagName === 'INPUT' && c.type === 'text' ? 'input' : 'change', leerCampos);
+
+  $('filtros-quitar').addEventListener('click', () => {
+    filtros = { ...SIN_FILTROS };
+    campos.posicion.value = '';
+    campos.resultado.value = '';
+    campos.cartas.value = '';
+    campos.showdown.checked = false;
+    campos.noSeguiste.checked = false;
+    pintar();
+  });
 
   return { alEntrar: actualizar };
 }

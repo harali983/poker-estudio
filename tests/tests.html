@@ -68,7 +68,10 @@
       cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
     } from '../js/motor.js';
     import { cerrarMano, pedirMisCartas } from '../js/manos.js';
-    import { resumenMano, sumarResultados, agruparPorPartida, manoCerrada } from '../js/historial.js';
+    import {
+      resumenMano, sumarResultados, agruparPorPartida, manoCerrada, siguioRecomendacion,
+      filtroDeCartas, hayFiltros, filtrarGrupos, posicionesUsadas, SIN_FILTROS,
+    } from '../js/historial.js';
     import {
       calcularFinal, repartir, netos, unidadDeFichas, unidadDeReparto, calcularBotes, faltanGanadores,
       decidirShowdown, puedeHacerMuck, motivoShowdown,
@@ -1423,6 +1426,66 @@
           'Agrupar: una mano de una partida que ya no existe sale igual; si no jugabas, no suma', ver(gC.total));
         okH(agruparPorPartida([]).length === 0 && manoCerrada(gano) && !manoCerrada({ final: null }),
           'Sin manos, la lista está vacía; manoCerrada distingue las manos en curso');
+
+        // ---- Paso 2: ¿seguiste la recomendación? ----
+        // En mSd los eventos son: 0-1 ciegas, 2 "0 call" (tú), 3 "1 fold", 4 "2 check", 5 flop,
+        // 6 "2 check", 7 "0 check" (tú, sin nada que pagar)…
+        const sig = (mano, evento, consejo) => siguioRecomendacion(mano, { evento, consejo });
+        okH(sig(mSd, 2, 'call') === true && sig(mSd, 2, 'subir') === false && sig(mSd, 2, 'fold') === false && sig(mSd, 2, 'check') === false,
+          'Recomendación: pagaste 2 → sigue "call"; no sigue "subir", "fold" ni "check"',
+          ['call', 'subir', 'fold', 'check'].map((c) => c + ':' + sig(mSd, 2, c)).join(' '));
+        okH(sig(mSd, 7, 'check') === true && sig(mSd, 7, 'fold') === true && sig(mSd, 7, 'apostar') === false,
+          'Recomendación: check sin nada que pagar sigue "check" y también "fold" (pasar gratis); no sigue "apostar"',
+          ['check', 'fold', 'apostar'].map((c) => c + ':' + sig(mSd, 7, c)).join(' '));
+        okH(sig(mSd, 2, null) === null && sig(mSd, 3, 'call') === null && sig(mSd, 99, 'call') === null && siguioRecomendacion(mSd, null) === null,
+          'Recomendación: sin consejo, o si el evento no es una acción tuya → no se sabe (null)');
+        const mSube = jugar(nueva(3, 0), ['0 subida 9', '1 fold', '2 fold']);
+        okH(siguioRecomendacion(mSube, { evento: 2, consejo: 'subir', hasta: 6 }) === true && sig(mSube, 2, 'allin') === true && sig(mSube, 2, 'call') === false,
+          'Recomendación: subir a 9 cuando decía subir a 6 cuenta como seguirla (cuenta la acción, no el tamaño)');
+        const conDec = (base, consejo) => ({ ...base, decisiones: [{ evento: 2, consejo, equidad: 0.5 }] });
+        okH(resumenMano(conDec(gano, 'subir')).noSeguiste === true && resumenMano(conDec(gano, 'call')).noSeguiste === false
+          && resumenMano(gano).noSeguiste === false,
+          'Resumen: noSeguiste si alguna decisión no se siguió; sin decisiones, false');
+
+        // ---- Paso 2: filtro de cartas ----
+        const cartasOk = (texto, si, no) => {
+          const f = filtroDeCartas(texto);
+          return typeof f === 'function' && si.every((c) => f(c)) && no.every((c) => !f(c));
+        };
+        okH(cartasOk('AK', ['AKs', 'AKo'], ['AQs', 'KK']) && cartasOk('ka', ['AKs', 'AKo'], ['KQs'])
+          && cartasOk('AKs', ['AKs'], ['AKo']) && cartasOk('aKo', ['AKo'], ['AKs']),
+          'Cartas: "AK" = AKs y AKo; "ka" igual; "AKs" solo suited; "aKo" solo offsuit');
+        okH(cartasOk('QQ', ['QQ'], ['KK', 'AQs']) && cartasOk('parejas', ['22', 'AA'], ['AKs']) && cartasOk('A', ['AKs', 'A2o', 'AA'], ['KQs'])
+          && cartasOk('10', ['T9s', 'AT'], ['98s']) && cartasOk('t9s', ['T9s'], ['T9o']) && cartasOk('suited', ['72s'], ['AKo', 'QQ']),
+          'Cartas: "QQ", "parejas", "A" (cualquier as), "10" = T, "t9s", "suited"');
+        okH(filtroDeCartas('') === undefined && filtroDeCartas('  ') === undefined && filtroDeCartas('xyz') === null
+          && filtroDeCartas('QQs') === null && filtroDeCartas('AKx') === null,
+          'Cartas: vacío → sin filtro; "xyz", "QQs" o "AKx" → no se entiende (null)');
+
+        // ---- Paso 2: filtrar la lista (grupos de arriba: a1 AKs +3 BTN, a2 +6 BTN, b1 −2 BTN, c1 sin ti) ----
+        const fl = (f) => filtrarGrupos(grupos, { ...SIN_FILTROS, ...f });
+        const ids = (r) => r.grupos.flatMap((g) => g.manos.map((x) => x.id)).join(',');
+        const fSin = fl({});
+        okH(fSin.total === 4 && fSin.vistas === 4 && ids(fSin) === 'b1,c1,a2,a1' && !hayFiltros(SIN_FILTROS),
+          'Filtros: sin filtros se ven las 4 manos (también la que no jugabas)', ids(fSin));
+        const fGan = fl({ resultado: 'ganadas' });
+        okH(fGan.vistas === 2 && fGan.total === 4 && ids(fGan) === 'a2,a1' && fGan.grupos.length === 1,
+          'Filtros: "Ganadas" → 2 de 4; la partida B (perdida) y la C (sin ti) desaparecen', `${fGan.vistas} de ${fGan.total} · ${ids(fGan)}`);
+        okH(ids(fl({ resultado: 'perdidas' })) === 'b1' && fl({ resultado: 'cero' }).vistas === 0,
+          'Filtros: "Perdidas" → b1; "Sin cambio" → ninguna');
+        const fAK = fl({ cartas: 'AK' });
+        okH(ids(fAK) === 'a1' && ver(fAK.grupos[0].total) === ver({ manos: 1, jugadas: 1, resultado: 3, resultadoBB: 1.5 }),
+          'Filtros: cartas "AK" → solo a1, y el total de la partida se recalcula con lo que se ve', ver(fAK.grupos[0].total));
+        okH(ids(fl({ showdown: true })) === 'b1,a2,a1' && ids(fl({ posicion: 'BTN' })) === 'b1,a2,a1' && fl({ posicion: 'SB' }).grupos.length === 0,
+          'Filtros: "solo showdown" y posición BTN → las 3 tuyas (la mano sin ti no sale); SB → ninguna');
+        okH(fl({ cartas: 'xyz' }).vistas === 4 && !hayFiltros({ ...SIN_FILTROS, cartas: 'xyz' }),
+          'Filtros: un texto de cartas que no se entiende no filtra nada');
+        const gruposDec = agruparPorPartida([m('d1', 'D', 1, '2026-11-13T10:00', conDec(gano, 'subir')), m('d2', 'D', 2, '2026-11-13T10:05', conDec(gano, 'call'))]);
+        okH(filtrarGrupos(gruposDec, { ...SIN_FILTROS, noSeguiste: true }).grupos.flatMap((g) => g.manos.map((x) => x.id)).join(',') === 'd1',
+          'Filtros: "no seguí la recomendación" → solo la mano en la que no la seguiste');
+        okH(ver(posicionesUsadas(grupos)) === '["BTN"]'
+          && ver(posicionesUsadas([{ manos: [{ posicion: 'BB' }, { posicion: 'UTG' }, { posicion: 'BTN/SB' }, { posicion: 'CO' }] }])) === '["UTG","CO","BTN/SB","BB"]',
+          'Posiciones del desplegable: solo las usadas, en el orden de la mesa', ver(posicionesUsadas(grupos)));
       }
     }
 
