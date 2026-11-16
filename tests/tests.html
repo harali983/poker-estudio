@@ -385,6 +385,15 @@
         'Antes del flop empieza el UTG (izquierda de la BB): paga 2 o sube a 4 como mínimo', resumen(s0));
       ok(m6.jugadores.map((j) => j.posicion).join(',') === 'BTN,SB,BB,UTG,MP,CO', 'La mano guarda la foto de las posiciones');
 
+      // Decimales sin restos de coma flotante (antes: el turno volvía al 0 con aPagar 4,4e-16)
+      const mDec = jugar(crearMano({ ...partidaDe(3, 0), ciegas: { sb: 0.1, bb: 0.25, ante: 0 } }, { id: 'dec', numero: 1, fecha: 'x' }),
+        ['0 subida 0.55', '1 fold', '2 subida 2.6', '0 call']);
+      const sDec = calcularEstado(mDec);
+      const puestoDec = (a) => sDec.jugadores.find((j) => j.asiento === a).puesto;
+      ok(sDec.fase === 'cartas' && sDec.faltan === 'flop' && puestoDec(0) === 2.6 && puestoDec(2) === 2.6 && Math.round(sDec.bote * 100) === 530,
+        'Ciegas 0,1/0,25: sube 0,55, se retira la SB, la BB sube a 2,6 y pagas → falta el flop; puestos 2,6 y 2,6; bote 5,3',
+        `${resumen(sDec)} · puestos ${puestoDec(0)} y ${puestoDec(2)}`);
+
       // Todos pagan: la BB tiene opción
       const limp = ['3 call', '4 fold', '5 call', '0 call', '1 call'];
       const sOpcion = est(m6, limp);

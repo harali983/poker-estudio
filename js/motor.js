@@ -29,6 +29,11 @@ import { calcularPosiciones } from './posiciones.js';
 export const CALLES = ['preflop', 'flop', 'turn', 'river'];
 const CARTAS_POR_CALLE = { flop: 3, turn: 1, river: 1 };
 
+// Redondea a céntimos. Con decimales (ciegas 0,1/0,25), sumar fichas deja restos de coma
+// flotante (2,5999999999999996 en vez de 2,6) y el motor creía que aún faltaba por pagar.
+// Es local a propósito: final.js ya importa motor.js y no conviene importarlo al revés.
+const aCentimos = (x) => Math.round(x * 100) / 100;
+
 /**
  * Prepara una mano nueva a partir de la partida: foto de los jugadores (posición y fichas)
  * y los eventos obligatorios (antes y ciegas).
@@ -162,9 +167,9 @@ export function calcularEstado(mano, eventos = mano.eventos) {
       diferencia = j.fichas;
       j.allin = true;
     }
-    j.puesto += diferencia;
-    j.total += diferencia;
-    if (j.fichas !== null) j.fichas -= diferencia;
+    j.puesto = aCentimos(j.puesto + diferencia);
+    j.total = aCentimos(j.total + diferencia);
+    if (j.fichas !== null) j.fichas = aCentimos(j.fichas - diferencia);
   }
 
   eventos.forEach((ev, i) => {
@@ -176,8 +181,8 @@ export function calcularEstado(mano, eventos = mano.eventos) {
 
     if (ev.tipo === 'ante') {
       const c = j.fichas === null ? ev.cantidad : Math.min(ev.cantidad, j.fichas);
-      j.total += c;
-      if (j.fichas !== null) { j.fichas -= c; if (j.fichas === 0) j.allin = true; }
+      j.total = aCentimos(j.total + c);
+      if (j.fichas !== null) { j.fichas = aCentimos(j.fichas - c); if (j.fichas === 0) j.allin = true; }
     } else if (ev.tipo === 'ciega') {
       poner(j, ev.hasta, i);
       e.apuestaMaxima = Math.max(e.apuestaMaxima, j.puesto);
