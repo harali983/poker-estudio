@@ -141,8 +141,11 @@ function detallePartida(grupo) {
 
 // ---- Una mano: nº, hora, tus cartas, posición y resultado ----
 function pintarFila(r) {
-  const li = el('li', 'fila-mano' + (r.jugaba ? '' : ' no-jugaba'));
-  li.append(
+  // Toda la fila es un enlace a la ficha de la mano (pantalla-ver-mano.js)
+  const li = el('li');
+  const fila = el('a', 'fila-mano' + (r.jugaba ? '' : ' no-jugaba'));
+  fila.href = '#ver-mano/' + encodeURIComponent(r.id);
+  fila.append(
     el('span', 'mano-num', '#' + r.numero),
     el('span', 'mano-hora texto-suave', hora(r.fecha)),
     pintarCartas(r),
@@ -150,6 +153,7 @@ function pintarFila(r) {
     el('span', 'mano-res ' + (r.jugaba ? claseResultado(r.resultado) : 'texto-suave'),
       r.jugaba ? conSigno(r.resultado) : 'no jugabas'),
   );
+  li.append(fila);
   return li;
 }
 
@@ -167,34 +171,34 @@ function pintarCartas(r) {
   return span;
 }
 
-// ---- Utilidades ----
-function el(etiqueta, clase = '', texto = null) {
+// ---- Utilidades (las usa también la ficha de la mano) ----
+export function el(etiqueta, clase = '', texto = null) {
   const e = document.createElement(etiqueta);
   if (clase) e.className = clase;
   if (texto !== null) e.textContent = texto;
   return e;
 }
 
-function numero(n) {
+export function numero(n) {
   return n.toLocaleString('es-ES', { maximumFractionDigits: 2 });
 }
 
-function conSigno(n) {
+export function conSigno(n) {
   if (!n) return '0';
   return (n > 0 ? '+' : '−') + numero(Math.abs(n));
 }
 
-function claseResultado(n) {
+export function claseResultado(n) {
   return n > 0 ? 'positivo' : n < 0 ? 'negativo' : 'neutro';
 }
 
-function fechaCorta(iso) {
+export function fechaCorta(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function hora(iso) {
+export function hora(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });

@@ -67,10 +67,10 @@
       CALLES, crearMano, calcularEstado, opciones, deshacer, puedeDeshacer, eventoDeAccion, eventoDeMesa,
       cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
     } from '../js/motor.js';
-    import { cerrarMano, pedirMisCartas } from '../js/manos.js';
+    import { cerrarMano, pedirMisCartas, borrarMano } from '../js/manos.js';
     import {
       resumenMano, sumarResultados, agruparPorPartida, manoCerrada, siguioRecomendacion,
-      filtroDeCartas, hayFiltros, filtrarGrupos, posicionesUsadas, SIN_FILTROS,
+      filtroDeCartas, hayFiltros, filtrarGrupos, posicionesUsadas, SIN_FILTROS, fichaDeMano,
     } from '../js/historial.js';
     import {
       calcularFinal, repartir, netos, unidadDeFichas, unidadDeReparto, calcularBotes, faltanGanadores,
@@ -1526,6 +1526,66 @@
         okH(ver(posicionesUsadas(grupos)) === '["BTN"]'
           && ver(posicionesUsadas([{ manos: [{ posicion: 'BB' }, { posicion: 'UTG' }, { posicion: 'BTN/SB' }, { posicion: 'CO' }] }])) === '["UTG","CO","BTN/SB","BB"]',
           'Posiciones del desplegable: solo las usadas, en el orden de la mesa', ver(posicionesUsadas(grupos)));
+
+        // ---- Paso 3: ficha de una mano ----
+        const nombresF = new Map([['j1', 'Ana'], ['j2', 'Luis']]);
+        const textos = (calle) => calle.lineas.map((l) => l.texto).join(' | ');
+        // "gano": eres el BTN con A♠ K♠; Ana (SB) se retira, Luis (BB) pasa y ganas en el showdown
+        const fGano = fichaDeMano(gano, nombresF);
+        okH(textos(fGano.calles[0]) === 'Ana pone la ciega pequeña (1) | Luis pone la ciega grande (2) | Tú pagas 2 | Ana se retira | Luis pasa',
+          'Ficha: el preflop se lee solo (ciegas, "Tú pagas 2", "Ana se retira", "Luis pasa")', textos(fGano.calles[0]));
+        const flopF = fGano.calles[1];
+        okH(fGano.calles.map((c) => c.calle).join(',') === 'preflop,flop,turn,river' && ver(flopF.cartas) === '[0,1,2]' && flopF.bote === 5
+          && flopF.jugadores === 2 && textos(flopF) === 'Luis pasa | Tú pasas' && fGano.calles[0].cartas === null && ver(fGano.mesa) === '[0,1,2,3,4]',
+          'Ficha: una calle por cada carta de la mesa, con sus cartas, el bote al empezar (5) y cuántos seguían (2)',
+          fGano.calles.map((c) => `${c.calle} ${c.bote} ${c.jugadores}`).join(' · '));
+        okH(fGano.calles[0].lineas.map((l) => l.tipo).join(',') === 'ciega,ciega,call,fold,check' && fGano.calles[0].lineas[2].yo
+          && fGano.calles[0].lineas[2].evento === 2 && fGano.calles[0].lineas[2].nombre === 'Tú' && fGano.calles[0].lineas[2].accion === 'pagas 2',
+          'Ficha: cada línea dice qué pasó de verdad (ciega, call, fold, check), de quién es y su evento');
+        okH(ver(fGano.final.lineas) === ver(['Ganas tú en el showdown: te llevas 5.']) && fGano.final.motivo === 'showdown'
+          && fGano.final.mostradas.length === 1 && fGano.final.mostradas[0].nombre === 'Tú' && fGano.final.mostradas[0].jugada === 'póker de 2'
+          && ver(fGano.final.mostradas[0].cartas) === ver(tc('As Ks')),
+          'Ficha: final "Ganas tú en el showdown: te llevas 5." y tus cartas mostradas con su jugada', ver(fGano.final));
+        okH(ver(fGano.jugadores.map((j) => [j.nombre, j.posicion, j.puesto, j.neto, j.retirado]))
+          === ver([['Tú', 'BTN', 2, 3, false], ['Ana', 'SB', 1, -1, true], ['Luis', 'BB', 2, -2, false]])
+          && fGano.resumen.resultado === 3 && fGano.notas === '' && fichaDeMano({ ...gano, notas: 'farol' }).notas === 'farol',
+          'Ficha: jugadores con posición, lo que puso cada uno, su resultado y quién se retiró; las notas',
+          ver(fGano.jugadores.map((j) => [j.nombre, j.neto])));
+        // Subidas, call parcial y all-in. Botón en el 2 (Luis, 9 fichas); tú SB, Ana BB
+        const mAllinF = jugar(nueva(3, 2, { fichas: [200, 200, 9] }), ['2 call', '0 subida 6', '1 call', '2 allin', '0 call', '1 fold', 'flop', 'turn', 'river']);
+        const fAllin = fichaDeMano(cerrar(mAllinF, { ganadores: [2] }), nombresF);
+        okH(textos(fAllin.calles[0]) === 'Tú pones la ciega pequeña (1) | Ana pone la ciega grande (2) | Luis paga 2 | Tú subes hasta 6'
+          + ' | Ana paga 4 (hasta 6) | Luis va all-in (hasta 9) | Tú pagas 3 (hasta 9) | Ana se retira',
+          'Ficha: "subes hasta 6", "paga 4 (hasta 6)", "va all-in (hasta 9)", "pagas 3 (hasta 9)"', textos(fAllin.calles[0]));
+        okH(fAllin.calles[1].lineas.length === 0 && fAllin.calles[1].bote === 24 && fAllin.calles[1].jugadores === 2
+          && ver(fAllin.final.lineas) === ver(['Gana Luis en el showdown: se lleva 24.']) && fAllin.final.mostradas.length === 0,
+          'Ficha: con un all-in pagado, las calles siguientes salen sin acciones; gana Luis 24', ver(fAllin.final.lineas));
+        // La BB (4 fichas) paga y se queda all-in; lo que no pudo pagar vuelve a ti
+        const mCortoF = jugar(nueva(3, 0, { fichas: [100, 100, 4] }), ['0 subida 10', '1 fold', '2 call', 'flop', 'turn', 'river']);
+        const fCorto = fichaDeMano(cerrar(mCortoF, { ganadores: [2] }), nombresF);
+        okH(fCorto.calles[0].lineas[4].texto === 'Luis paga 2 (hasta 4) y queda all-in'
+          && ver(fCorto.final.lineas) === ver(['Gana Luis en el showdown: se lleva 9.', 'Recuperas 6 que nadie pagó.'])
+          && fCorto.jugadores[0].neto === -4 && fCorto.jugadores[0].fichasInicio === 100,
+          'Ficha: "paga 2 (hasta 4) y queda all-in"; gana 9 y "Recuperas 6 que nadie pagó" (tú −4)',
+          fCorto.calles[0].lineas[4].texto + ' · ' + fCorto.final.lineas.join(' '));
+        // Sin showdown, sin nombres y con otro formato de cantidades
+        const fFold = fichaDeMano(cerrar(mFold, {}, 6), new Map(), (n) => n + ' €');
+        okH(fFold.calles.length === 1 && fFold.mesa.length === 0 && fFold.calles[0].lineas[2].texto === 'Asiento 4 sube hasta 6 €'
+          && fFold.calles[0].lineas[2].tipo === 'agresiva' && fFold.calles[0].lineas[5].texto === 'Tú te retiras'
+          && ver(fFold.final.lineas) === ver(['Gana Asiento 4 sin showdown: se lleva 5 €.', 'Asiento 4 recupera 4 € que nadie pagó.']),
+          'Ficha: sin flop hay una sola calle; sin nombre sale "Asiento 4"; las cantidades usan el formato que se pasa', fFold.final.lineas.join(' '));
+        // Ante igual para todos: una sola línea. Muck y empate
+        const mAnteF = jugar(nueva(3, 0, { ante: 1 }), ['0 fold', '1 fold']);
+        const fAnte = fichaDeMano(cerrar(mAnteF, {}), nombresF);
+        okH(fAnte.calles[0].lineas[0].texto === 'Todos ponen el ante (1)' && fAnte.calles[0].lineas.length === 5
+          && fAnte.calles[0].lineas[1].tipo === 'ciega',
+          'Ficha: si todos ponen el mismo ante, sale en una sola línea', textos(fAnte.calles[0]));
+        const fMuckF = fichaDeMano({ ...conMuck, final: { ...conMuck.final, muck: [0] } }, nombresF);
+        const fEmpate = fichaDeMano(cerrar(mSd, { ganadores: [0, 2], manual: true }), nombresF);
+        okH(fMuckF.final.lineas.join(' ') === 'Gana Luis en el showdown: se lleva 5. Tiras tus cartas sin enseñarlas (muck).'
+          && fEmpate.final.lineas.length === 1 && fEmpate.final.lineas[0].startsWith('Bote repartido: ') && fEmpate.final.lineas[0].includes('Tú ')
+          && fEmpate.final.lineas[0].includes('Luis '),
+          'Ficha: el muck y el bote repartido en un empate', fMuckF.final.lineas.join(' ') + ' · ' + fEmpate.final.lineas[0]);
       }
     }
 
@@ -1592,6 +1652,21 @@
 
         await prueba.borrar('manos', 'm1');
         ok((await prueba.listar('manos')).length === 2, 'Borrar una mano');
+
+        // Borrar una mano con sus participaciones (Fase 3, paso 3): todo a la vez
+        await prueba.guardarVarios('participaciones', [
+          { id: 'm2:0', manoId: 'm2', jugadorId: 'yo' },
+          { id: 'm2:1', manoId: 'm2', jugadorId: 'j1' },
+          { id: 'm3:0', manoId: 'm3', jugadorId: 'yo' },
+        ]);
+        await borrarMano('m2', prueba);
+        const quedanManos = (await prueba.listar('manos')).map((m) => m.id).join(', ');
+        const quedanPart = (await prueba.listar('participaciones')).map((p) => p.id).join(', ');
+        ok(quedanManos === 'm3' && quedanPart === 'm3:0',
+          'Borrar una mano borra también sus participaciones (y solo las suyas)', quedanManos + ' · ' + quedanPart);
+        await borrarMano('no-existe', prueba);
+        ok((await prueba.listar('manos')).length === 1 && (await prueba.listar('participaciones')).length === 1,
+          'Borrar una mano que no existe no hace nada');
 
         ok(await prueba.leerAjuste('unidad', 'fichas') === 'fichas', 'Ajuste sin guardar → valor por defecto');
         await prueba.guardarAjuste('unidad', 'bb');

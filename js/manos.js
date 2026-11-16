@@ -44,6 +44,18 @@ export function guardarMano(mano) {
 }
 
 /**
+ * Borra una mano y sus participaciones (así sale también de las estadísticas), todo o nada.
+ * La partida no se toca: sus fichas y el número de la próxima mano siguen igual.
+ * "base": la base de datos (los tests pasan la suya).
+ */
+export function borrarMano(manoId, base = bd) {
+  return base.borrarJuntos({
+    manos: [manoId],
+    participaciones: { indice: 'manoId', valor: manoId },
+  });
+}
+
+/**
  * Cierra la mano terminada (lógica pura, con tests):
  *  - apunta el final (ganadores, lo que se devuelve y las cartas mostradas),
  *  - actualiza las fichas de la partida (si se llevan), el botón avanza y se cuenta la mano,

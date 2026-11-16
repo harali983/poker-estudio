@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.3.4</p>
+    <p class="version">Versión 0.3.5</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -314,6 +314,51 @@
     </details>
     <p id="manos-contador" class="manos-contador texto-suave" hidden></p>
     <div id="manos-lista" class="manos-lista"></div>
+  </section>
+
+  <!-- ==================== PANTALLA: FICHA DE UNA MANO ==================== -->
+  <!-- Se abre al tocar una mano en Mis manos (#ver-mano/<id>). La rellena pantalla-ver-mano.js
+       con lo que calcula fichaDeMano (historial.js). -->
+  <section id="pantalla-ver-mano" class="pantalla" hidden>
+    <header class="barra-pantalla">
+      <a href="#manos" class="boton boton-pequeno volver">‹ Mis manos</a>
+      <h1 id="ficha-titulo">Mano</h1>
+    </header>
+
+    <div id="ficha-no-esta" class="tarjeta" hidden>
+      <p><strong>No encuentro esa mano.</strong></p>
+      <p class="texto-suave">Puede que la hayas borrado o que todavía se esté jugando. <a href="#manos">Volver a Mis manos</a></p>
+    </div>
+
+    <div id="ficha-contenido" hidden>
+      <!-- Datos: tus cartas, posición, resultado, fecha, ciegas y la mesa -->
+      <section id="ficha-datos" class="tarjeta ficha-datos"></section>
+
+      <section class="tarjeta">
+        <h2>Acciones</h2>
+        <div id="ficha-calles"></div>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Final</h2>
+        <div id="ficha-final"></div>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Jugadores</h2>
+        <ul id="ficha-jugadores" class="ficha-jugadores"></ul>
+      </section>
+
+      <!-- Las notas se guardan solas mientras escribes -->
+      <section class="tarjeta">
+        <h2><label for="ficha-notas">Notas</label></h2>
+        <textarea id="ficha-notas" class="ficha-notas" rows="4" autocapitalize="sentences"
+                  placeholder="Qué pensabas, qué harías distinto…"></textarea>
+        <p id="ficha-guardado" class="guardado" aria-live="polite"></p>
+      </section>
+
+      <button id="ficha-borrar" type="button" class="boton boton-ancho boton-peligro">Borrar mano</button>
+    </div>
   </section>
 
   <!-- ==================== PANTALLA: AJUSTES ==================== -->

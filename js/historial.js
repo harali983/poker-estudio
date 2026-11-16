@@ -8,8 +8,10 @@
 // resultados en BB mano a mano (no "total en fichas ÷ BB de ahora"), porque las ciegas
 // pueden cambiar durante la partida.
 
-import { calcularEstado, opciones } from './motor.js';
-import { netos, redondear } from './final.js';
+import { calcularEstado, opciones, posicionesDeMano } from './motor.js';
+import { netos, redondear, mesaCompleta } from './final.js';
+import { evaluar } from './evaluador.js';
+import { nombreJugada } from './describir.js';
 import { clase } from './rangos.js';
 import { POSICIONES } from './posiciones.js';
 
@@ -116,6 +118,146 @@ export function siguioRecomendacion(mano, decision) {
     case 'fold': return hice === 'fold' || (hice === 'check' && antes.aPagar === 0);
     default: return null;
   }
+}
+
+// ---------------------------------------------------------------- Ficha de una mano
+
+const NOMBRE_CALLE = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
+
+/**
+ * Todo lo que enseña la ficha de una mano cerrada (pantalla-ver-mano.js), ya con sus textos:
+ * {
+ *   resumen: resumenMano(mano), ciegas, notas,
+ *   mesa: [cartas de la mesa que se anotaron],
+ *   jugadores: [{ asiento, nombre, yo, posicion, fichasInicio, puesto, neto, retirado }],
+ *   calles: [{ calle, titulo, cartas: null (preflop) | [..] ([] = sin anotar),
+ *              bote: el bote al empezar la calle (null en el preflop), jugadores: cuántos seguían,
+ *              lineas: [{ evento, asiento, nombre, yo, tipo, accion, texto }] }],
+ *   final: { motivo, lineas: [textos], mostradas: [{ asiento, nombre, yo, cartas, jugada | null }] }
+ * }
+ * nombres: Map jugadorId → nombre (tú sales como "Tú"; sin nombre, "Asiento 3").
+ * numero: cómo se escribe una cantidad (la pantalla pasa el formato español).
+ * En cada línea, "tipo" es lo que pasó de verdad: ante, ciega, fold, check, call o agresiva.
+ */
+export function fichaDeMano(mano, nombres = new Map(), numero = String) {
+  const estado = calcularEstado(mano);
+  const pos = posicionesDeMano(mano);
+  const porAsiento = new Map(mano.jugadores.map((j) => [j.asiento, j]));
+  const esYo = (a) => (porAsiento.get(a) || {}).jugadorId === 'yo';
+  const nombre = (a) => {
+    if (esYo(a)) return 'Tú';
+    const j = porAsiento.get(a);
+    return (j && nombres.get(j.jugadorId)) || 'Asiento ' + (a + 1);
+  };
+  const quien = (a) => ({ asiento: a, nombre: nombre(a), yo: esYo(a) });
+
+  // ---- Acciones por calle ----
+  const calles = [{ calle: 'preflop', titulo: NOMBRE_CALLE.preflop, cartas: null, bote: null, jugadores: mano.jugadores.length, lineas: [] }];
+  // Si todos ponen el mismo ante, una sola línea en lugar de una por jugador
+  const antes = mano.eventos.filter((ev) => ev.tipo === 'ante');
+  const anteIgual = antes.length > 1 && antes.every((ev) => ev.cantidad === antes[0].cantidad);
+  if (anteIgual) {
+    calles[0].lineas.push({ evento: null, asiento: null, nombre: 'Todos', yo: false, tipo: 'ante',
+      accion: `ponen el ante (${numero(antes[0].cantidad)})`, texto: `Todos ponen el ante (${numero(antes[0].cantidad)})` });
+  }
+
+  let previo = calcularEstado(mano, []);
+  mano.eventos.forEach((ev, i) => {
+    const despues = calcularEstado(mano, mano.eventos.slice(0, i + 1));
+    if (ev.tipo === 'mesa') {
+      calles.push({ calle: ev.calle, titulo: NOMBRE_CALLE[ev.calle] || ev.calle, cartas: [...(ev.cartas || [])],
+        bote: previo.bote, jugadores: previo.vivos.length, lineas: [] });
+    } else if (porAsiento.has(ev.asiento) && !(ev.tipo === 'ante' && anteIgual)) {
+      const { tipo, accion } = textoDeEvento(ev, previo, despues, esYo(ev.asiento), ev.asiento === pos.bb, numero);
+      calles[calles.length - 1].lineas.push({ evento: i, ...quien(ev.asiento), tipo, accion, texto: nombre(ev.asiento) + ' ' + accion });
+    }
+    previo = despues;
+  });
+
+  // ---- Jugadores: lo que puso cada uno y su resultado ----
+  const neto = netos(estado, mano.final);
+  const jugadores = mano.jugadores.map((j) => {
+    const e = estado.jugadores.find((x) => x.asiento === j.asiento);
+    return { ...quien(j.asiento), posicion: j.posicion, fichasInicio: j.fichasInicio ?? null,
+      puesto: e.total, neto: neto.get(j.asiento) ?? 0, retirado: !e.vivo };
+  });
+
+  // ---- Final: quién gana, lo devuelto, muck y cartas mostradas ----
+  const f = mano.final;
+  const lineas = [];
+  const reparto = (ganadores) => ganadores.map((g) => `${nombre(g.asiento)} ${numero(g.cantidad)}`).join(' · ');
+  if (f.botes) {
+    f.botes.forEach((b, k) => {
+      const nombreBote = k === 0 ? 'Bote principal' : f.botes.length === 2 ? 'Bote secundario' : 'Bote secundario ' + k;
+      lineas.push(`${nombreBote} (${numero(b.cantidad)}): ${reparto(b.ganadores)}.`);
+    });
+  } else if (f.ganadores.length === 1) {
+    const g = f.ganadores[0];
+    const como = f.motivo === 'showdown' ? 'en el showdown' : 'sin showdown';
+    lineas.push(esYo(g.asiento) ? `Ganas tú ${como}: te llevas ${numero(g.cantidad)}.`
+      : `Gana ${nombre(g.asiento)} ${como}: se lleva ${numero(g.cantidad)}.`);
+  } else if (f.ganadores.length > 1) {
+    lineas.push(`Bote repartido: ${reparto(f.ganadores)}.`);
+  }
+  if (f.devuelto) {
+    const d = f.devuelto;
+    lineas.push(esYo(d.asiento) ? `Recuperas ${numero(d.cantidad)} que nadie pagó.`
+      : `${nombre(d.asiento)} recupera ${numero(d.cantidad)} que nadie pagó.`);
+  }
+  for (const a of f.muck || []) {
+    lineas.push(esYo(a) ? 'Tiras tus cartas sin enseñarlas (muck).' : `${nombre(a)} tira sus cartas sin enseñarlas (muck).`);
+  }
+  const mesa5 = mesaCompleta(mano);
+  const mostradas = (f.mostradas || []).filter((m) => m.cartas && m.cartas.length).map((m) => ({
+    ...quien(m.asiento),
+    cartas: [...m.cartas],
+    jugada: mesa5 && m.cartas.length === 2 ? nombreJugada(evaluar([...m.cartas, ...mesa5])) : null,
+  }));
+
+  return {
+    resumen: resumenMano(mano),
+    ciegas: { ...mano.ciegas },
+    notas: mano.notas || '',
+    mesa: [...estado.mesa],
+    jugadores,
+    calles,
+    final: { motivo: f.motivo, lineas, mostradas },
+  };
+}
+
+// Lo que hizo un evento, dicho en una frase sin el nombre: "sube hasta 6", "pagas 4 (hasta 6)".
+// Las cantidades salen de lo que el motor puso de verdad (no de lo que se tecleó).
+function textoDeEvento(ev, antes, despues, yo, esBB, numero) {
+  const jA = antes.jugadores.find((j) => j.asiento === ev.asiento);
+  const jD = despues.jugadores.find((j) => j.asiento === ev.asiento);
+  const v = (el, tu) => (yo ? tu : el);
+  const quedaAllin = jD.allin && !jA.allin;
+  const yAllin = quedaAllin ? v(' y queda all-in', ' y quedas all-in') : '';
+
+  if (ev.tipo === 'ante') {
+    return { tipo: 'ante', accion: `${v('pone', 'pones')} el ante (${numero(redondear(jD.total - jA.total))})` + yAllin };
+  }
+  if (ev.tipo === 'ciega') {
+    return { tipo: 'ciega', accion: `${v('pone', 'pones')} la ciega ${esBB ? 'grande' : 'pequeña'} (${numero(jD.puesto)})` + yAllin };
+  }
+
+  const tipo = tipoDeAccion(antes, despues, ev);
+  const anadido = redondear(jD.puesto - jA.puesto);
+  const hasta = numero(jD.puesto);
+  let accion;
+  switch (ev.accion) {
+    case 'fold': accion = v('se retira', 'te retiras'); break;
+    case 'check': accion = v('pasa', 'pasas'); break;
+    case 'call':
+      if (tipo === 'check') { accion = v('pasa', 'pasas'); break; } // call sin nada que pagar
+      accion = `${v('paga', 'pagas')} ${numero(anadido)}` + (anadido !== jD.puesto ? ` (hasta ${hasta})` : '') + yAllin;
+      break;
+    case 'apuesta': accion = `${v('apuesta', 'apuestas')} ${hasta}` + yAllin; break;
+    case 'subida': accion = `${v('sube', 'subes')} hasta ${hasta}` + yAllin; break;
+    case 'allin': accion = v('va all-in', 'vas all-in') + (anadido > 0 ? ` (hasta ${hasta})` : ''); break;
+    default: accion = String(ev.accion);
+  }
+  return { tipo, accion };
 }
 
 // ---------------------------------------------------------------- Filtros

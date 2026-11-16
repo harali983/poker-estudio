@@ -687,4 +687,74 @@ h2 {
 .campo-cartas label { display: flex; flex-direction: column; gap: 4px; }
 .filtros .boton-ancho { margin-top: 12px; }
 .manos-contador { margin: 4px 0 8px; font-size: 0.9rem; }
+/* Cada mano de la lista es un enlace a su ficha */
+a.fila-mano { color: inherit; text-decoration: none; touch-action: manipulation; }
+a.fila-mano:active { background: var(--boton-pulsado); }
+
+/* ===== Ficha de una mano (pantalla-ver-mano.js) ===== */
+.cartas-linea { display: inline-flex; gap: 6px; font-weight: 700; white-space: nowrap; }
+.ficha-datos { padding-top: 12px; }
+.ficha-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ficha-mias { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ficha-cartas { font-size: 1.7rem; gap: 8px; }
+.ficha-posicion { padding: 2px 8px; border-radius: 8px; background: var(--boton); font-size: 0.85rem; font-weight: 700; color: #f5c451; white-space: nowrap; }
+.ficha-resultado { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.ficha-resultado strong { font-size: 1.5rem; }
+.ficha-resultado .positivo, .jugador-neto.positivo { color: var(--acento); }
+.ficha-resultado .negativo, .jugador-neto.negativo { color: var(--malo); }
+.ficha-detalle { margin: 8px 0 0; line-height: 1.4; }
+.ficha-mesa { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 8px 0 0; font-size: 1.15rem; }
+.ficha-mesa > .texto-suave { font-size: 0.85rem; }
+/* Acciones por calle */
+.ficha-calle { padding: 8px 0; border-top: 1px solid var(--borde); }
+.ficha-calle:first-child { border-top: none; padding-top: 0; }
+.ficha-calle-titulo { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 10px; margin: 0 0 4px; font-size: 1rem; }
+.ficha-calle-titulo small { font-size: 0.8rem; font-weight: 400; }
+.ficha-lineas { list-style: none; margin: 0; padding: 0; }
+.ficha-lineas li { padding: 3px 0; font-size: 0.95rem; line-height: 1.3; }
+.ficha-lineas strong { font-weight: 600; }
+.ficha-lineas .linea-ante, .ficha-lineas .linea-ciega, .ficha-lineas .linea-fold { color: var(--texto-suave); }
+.ficha-lineas .linea-agresiva { color: #ffe0a8; }
+.linea-yo > strong:first-child, .linea-yo .jugador-nombre strong { color: var(--acento); }
+.ficha-sin-acciones { margin: 0; }
+/* Final y cartas mostradas */
+.ficha-final-linea { margin: 0 0 4px; line-height: 1.35; }
+.ficha-subtitulo { margin: 10px 0 2px; font-size: 0.8rem; font-weight: 600; color: var(--texto-suave); }
+.ficha-mostradas { list-style: none; margin: 0; padding: 0; }
+.ficha-mostradas li { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 10px; padding: 4px 0; }
+.ficha-mostradas .texto-suave { font-size: 0.9rem; }
+/* Jugadores: posición · nombre (y lo que puso) · resultado */
+.ficha-jugadores { list-style: none; margin: 0; padding: 0; }
+.ficha-jugadores li {
+  display: grid;
+  grid-template-columns: 3.6em minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--borde);
+  font-variant-numeric: tabular-nums;
+}
+.ficha-jugadores li:first-child { border-top: none; }
+.jugador-posicion { font-size: 0.8rem; font-weight: 700; color: #f5c451; white-space: nowrap; }
+.jugador-nombre { display: flex; flex-direction: column; min-width: 0; }
+.jugador-nombre strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.jugador-nombre small { font-size: 0.78rem; }
+.jugador-neto { font-weight: 600; white-space: nowrap; }
+/* Notas */
+.ficha-notas {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1.05rem; /* 16 px o más: si no, el iPhone hace zoom al escribir */
+  line-height: 1.4;
+  resize: vertical;
+}
+#ficha-no-esta a { color: var(--acento); }
+#ficha-borrar { margin-bottom: 16px; }
 @media (prefers-reduced-motion: reduce) { .filtros summary::before { transition: none; } }

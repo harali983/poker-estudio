@@ -10,6 +10,7 @@ import { iniciarInicio } from './pantalla-inicio.js';
 import { iniciarMesa } from './pantalla-mesa.js';
 import { iniciarMano } from './pantalla-mano.js';
 import { iniciarManos } from './pantalla-manos.js';
+import { iniciarVerMano } from './pantalla-ver-mano.js';
 import { bd, pedirPersistencia } from './db.js';
 import { mostrarError } from './avisos.js';
 
@@ -56,7 +57,7 @@ if ('serviceWorker' in navigator) {
 document.getElementById('btn-recargar').addEventListener('click', () => location.reload());
 
 // ---- 3. Navegación entre pantallas ----
-const PANTALLAS = ['inicio', 'jugar', 'mano', 'manos', 'calculadora', 'ajustes'];
+const PANTALLAS = ['inicio', 'jugar', 'mano', 'manos', 'ver-mano', 'calculadora', 'ajustes'];
 
 // Cada pantalla con lógica se prepara la primera vez que se abre.
 // Lo que devuelve ({ alEntrar, alSalir }, ambos opcionales) se guarda aquí.
@@ -66,18 +67,30 @@ const INICIAR = {
   jugar: iniciarMesa,
   mano: iniciarMano,
   manos: iniciarManos,
+  'ver-mano': iniciarVerMano,
   calculadora: iniciarCalculadora,
   ajustes: iniciarAjustes,
 };
 
 let actual = null;
+let parametroActual = null;
+let alturaDeLaLista = 0; // por dónde ibas en Mis manos al abrir una mano (para volver al mismo sitio)
 
+// La dirección puede llevar un dato detrás de una barra: "#ver-mano/<id de la mano>".
+// Ese dato se le pasa a alEntrar() de la pantalla.
 function mostrarPantalla() {
-  let nombre = location.hash.slice(1) || 'inicio';
-  if (!PANTALLAS.includes(nombre)) nombre = 'inicio'; // dirección desconocida → inicio
+  const [pedida, ...resto] = (location.hash.slice(1) || 'inicio').split('/');
+  const nombre = PANTALLAS.includes(pedida) ? pedida : 'inicio'; // dirección desconocida → inicio
+  let parametro = null;
+  if (nombre === pedida && resto.length) {
+    try { parametro = decodeURIComponent(resto.join('/')); } catch { parametro = resto.join('/'); }
+  }
 
-  if (nombre === actual) return;
+  if (nombre === actual && parametro === parametroActual) return;
   if (actual && preparadas[actual] && preparadas[actual].alSalir) preparadas[actual].alSalir();
+  if (actual === 'manos' && nombre === 'ver-mano') alturaDeLaLista = window.scrollY;
+  // Al volver de la ficha a la lista, se vuelve a la altura donde estabas
+  const altura = actual === 'ver-mano' && nombre === 'manos' ? alturaDeLaLista : 0;
 
   for (const p of PANTALLAS) {
     document.getElementById('pantalla-' + p).hidden = p !== nombre;
@@ -85,10 +98,15 @@ function mostrarPantalla() {
   if (INICIAR[nombre] && !preparadas[nombre]) {
     preparadas[nombre] = INICIAR[nombre]();
   }
-  if (preparadas[nombre] && preparadas[nombre].alEntrar) preparadas[nombre].alEntrar();
+  const listo = preparadas[nombre] && preparadas[nombre].alEntrar ? preparadas[nombre].alEntrar(parametro) : null;
 
   actual = nombre;
+  parametroActual = parametro;
   window.scrollTo(0, 0); // cada pantalla empieza arriba
+  if (altura) {
+    // La lista se pinta después de leer la base de datos: se espera a que esté
+    Promise.resolve(listo).then(() => { if (actual === nombre) window.scrollTo(0, altura); }, () => {});
+  }
 }
 
 window.addEventListener('hashchange', mostrarPantalla);

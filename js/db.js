@@ -211,6 +211,28 @@ export function crearBD(nombre = NOMBRE) {
       return transaccion(almacen, 'readwrite', (tx) => tx.objectStore(almacen).delete(clave));
     },
 
+    /**
+     * Borra en varios almacenes a la vez, todo o nada. De cada almacén se dan las claves,
+     * o un índice y su valor (se borran todos los objetos que lo tengan).
+     * Ejemplo: borrarJuntos({ manos: ['m1'], participaciones: { indice: 'manoId', valor: 'm1' } })
+     */
+    borrarJuntos(cambios) {
+      const almacenes = Object.keys(cambios);
+      return transaccion(almacenes, 'readwrite', (tx) => {
+        for (const almacen of almacenes) {
+          const a = tx.objectStore(almacen);
+          const que = cambios[almacen];
+          if (Array.isArray(que)) {
+            for (const clave of que) a.delete(clave);
+          } else {
+            // Las claves llegan un momento después; la transacción sigue abierta hasta borrarlas
+            const peticion = a.index(que.indice).getAllKeys(que.valor);
+            peticion.onsuccess = () => { for (const clave of peticion.result) a.delete(clave); };
+          }
+        }
+      });
+    },
+
     /** Lee un ajuste; si no está guardado, devuelve el valor por defecto. */
     async leerAjuste(clave, porDefecto) {
       const fila = await this.leer('ajustes', clave);
