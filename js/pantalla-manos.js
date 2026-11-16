@@ -38,7 +38,7 @@ function pintarGrupo(grupo) {
   const total = el('div', 'grupo-total');
   if (grupo.total.jugadas) {
     total.append(
-      el('strong', 'resultado ' + claseResultado(grupo.total.resultado), conSigno(grupo.total.resultado)),
+      el('strong', 'grupo-resultado ' + claseResultado(grupo.total.resultado), conSigno(grupo.total.resultado)),
       el('small', 'texto-suave', conSigno(grupo.total.resultadoBB) + ' BB'),
     );
   }

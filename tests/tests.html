@@ -1382,11 +1382,14 @@
           'Resumen: si no jugabas esa mano, no hay resultado ni posición', ver(rSinMi));
 
         // Agrupar por partida: orden, manos en curso fuera y suma en BB mano a mano
-        const m = (id, partidaId, numero, fecha, base, ciegas) =>
-          ({ ...base, id, partidaId, numero, fecha, ...(ciegas ? { ciegas } : {}) });
+        const m = (id, partidaId, numero, fecha, base) => ({ ...base, id, partidaId, numero, fecha });
+        // Una mano jugada de verdad con ciegas 2/4: pagas 4, la SB se retira y ganas 6 (+1,5 BB)
+        const partida24 = { ...partidaDe(3, 0), ciegas: { sb: 2, bb: 4, ante: 0 } };
+        const m24 = jugar(crearMano(partida24, { id: 'm24', numero: 1, fecha: 'x' }), aShowdown);
+        const gano24 = cerrarMano(m24, partida24, calcularEstado(m24), { ganadores: [0] }).mano;
         const manosH = [
-          m('a1', 'A', 1, '2026-11-10T20:00', gano),
-          m('a2', 'A', 2, '2026-11-10T20:05', gano, { sb: 2, bb: 4, ante: 0 }), // +3 fichas con BB 4 = +0,75 BB
+          m('a1', 'A', 1, '2026-11-10T20:00', gano),   // +3 fichas con BB 2 = +1,5 BB
+          m('a2', 'A', 2, '2026-11-10T20:05', gano24), // +6 fichas con BB 4 = +1,5 BB
           m('a3', 'A', 3, '2026-11-10T20:10', { ...mSd, final: null }),         // en curso: no sale
           m('b1', 'B', 1, '2026-11-12T21:00', cerrar(mSd, { ganadores: [2] })),
           m('c1', 'C', 1, '2026-11-11T18:00', sinMi),                            // partida borrada
@@ -1397,8 +1400,10 @@
         const gA = grupos.find((g) => g.partidaId === 'A');
         okH(gA.manos.map((r) => r.id).join(',') === 'a2,a1' && gA.partida && gA.partida.id === 'A',
           'Agrupar: dentro de la partida, de la última mano a la primera; la mano en curso no sale', gA.manos.map((r) => r.id).join(','));
-        okH(ver(gA.total) === ver({ manos: 2, jugadas: 2, resultado: 6, resultadoBB: 2.25 }),
-          'Total de la partida: +6 fichas y +2,25 BB (1,5 + 0,75: cada mano con su BB)', ver(gA.total));
+        okH(resumenMano(gano24).resultado === 6 && resumenMano(gano24).resultadoBB === 1.5,
+          'Resumen con ciegas 2/4: +6 fichas = +1,5 BB', ver(resumenMano(gano24)));
+        okH(ver(gA.total) === ver({ manos: 2, jugadas: 2, resultado: 9, resultadoBB: 3 }),
+          'Total de la partida: +9 fichas y +3 BB (1,5 + 1,5, cada mano con su BB; no 9 ÷ 4 = 2,25)', ver(gA.total));
         const gC = grupos.find((g) => g.partidaId === 'C');
         okH(gC.partida === null && ver(gC.total) === ver({ manos: 1, jugadas: 0, resultado: 0, resultadoBB: 0 }),
           'Agrupar: una mano de una partida que ya no existe sale igual; si no jugabas, no suma', ver(gC.total));

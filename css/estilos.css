@@ -632,10 +632,12 @@ h2 {
 .grupo-titulo p { margin: 2px 0 0; }
 .grupo-total { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
 .grupo-total small { font-size: 0.8rem; }
+.grupo-resultado { font-size: 1.05rem; }
+#manos-vacio a { color: var(--acento); }
 .lista-manos { list-style: none; margin: 8px 0 0; padding: 0; }
 .fila-mano {
   display: grid;
-  grid-template-columns: 3.2em 3.4em 1fr 3.2em auto;
+  grid-template-columns: 2.6em 3.2em 1fr 4.2em 5.5em;
   align-items: center;
   gap: 8px;
   min-height: 44px;
@@ -645,8 +647,8 @@ h2 {
 .mano-num { color: var(--texto-suave); font-size: 0.85rem; }
 .mano-hora { font-size: 0.85rem; }
 .mano-cartas { display: flex; gap: 4px; font-weight: 600; }
-.mano-pos { font-size: 0.85rem; }
+.mano-pos { font-size: 0.85rem; text-align: left; white-space: nowrap; }
 .mano-res { text-align: right; font-weight: 600; }
 .fila-mano.no-jugaba .mano-res { font-weight: 400; font-size: 0.85rem; }
-.resultado.positivo, .mano-res.positivo { color: var(--acento); }
-.resultado.negativo, .mano-res.negativo { color: var(--malo); }
+.grupo-resultado.positivo, .mano-res.positivo { color: var(--acento); }
+.grupo-resultado.negativo, .mano-res.negativo { color: var(--malo); }
