@@ -9,6 +9,7 @@ import { iniciarAjustes } from './pantalla-ajustes.js';
 import { iniciarInicio } from './pantalla-inicio.js';
 import { iniciarMesa } from './pantalla-mesa.js';
 import { iniciarMano } from './pantalla-mano.js';
+import { iniciarManos } from './pantalla-manos.js';
 import { bd, pedirPersistencia } from './db.js';
 import { mostrarError } from './avisos.js';
 
@@ -64,6 +65,7 @@ const INICIAR = {
   inicio: iniciarInicio,
   jugar: iniciarMesa,
   mano: iniciarMano,
+  manos: iniciarManos,
   calculadora: iniciarCalculadora,
   ajustes: iniciarAjustes,
 };

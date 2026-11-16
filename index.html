@@ -83,7 +83,7 @@
       </a>
     </nav>
 
-    <p class="version">Versión 0.3.2</p>
+    <p class="version">Versión 0.3.3</p>
   </section>
 
   <!-- ==================== PANTALLA: JUGAR ==================== -->
@@ -277,10 +277,12 @@
       <a href="#inicio" class="boton boton-pequeno volver">‹ Inicio</a>
       <h1>Mis manos</h1>
     </header>
-    <div class="tarjeta proximamente">
-      <p><strong>Próximamente.</strong> Aquí podrás buscar tus manos, repasarlas paso a paso, ver tus estadísticas y exportarlas.</p>
-      <p class="texto-suave texto-pequeno">Fase 3.</p>
+    <!-- Se rellena en pantalla-manos.js: una tarjeta por partida, con sus manos -->
+    <div id="manos-vacio" class="tarjeta" hidden>
+      <p><strong>Todavía no hay manos.</strong></p>
+      <p class="texto-suave">Aquí aparecen las manos que cierras en <a href="#jugar">Jugar</a>, agrupadas por partida.</p>
     </div>
+    <div id="manos-lista" class="manos-lista"></div>
   </section>
 
   <!-- ==================== PANTALLA: AJUSTES ==================== -->

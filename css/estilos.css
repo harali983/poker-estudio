@@ -283,7 +283,7 @@ h2 {
   min-height: 44px;
   text-decoration: none;
 }
-.proximamente p { margin: 12px 0; }
+
 
 /* ===== Continuar partida (en el menú) ===== */
 .opcion-continuar {
@@ -623,3 +623,30 @@ h2 {
   padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
   background: #1f4d33;
 }
+
+/* ===== Mis manos (pantalla-manos.js) ===== */
+.manos-lista { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+.grupo-partida { padding-bottom: 4px; }
+.grupo-cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.grupo-titulo h2 { margin: 0; }
+.grupo-titulo p { margin: 2px 0 0; }
+.grupo-total { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+.grupo-total small { font-size: 0.8rem; }
+.lista-manos { list-style: none; margin: 8px 0 0; padding: 0; }
+.fila-mano {
+  display: grid;
+  grid-template-columns: 3.2em 3.4em 1fr 3.2em auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border-top: 1px solid var(--borde);
+  font-variant-numeric: tabular-nums;
+}
+.mano-num { color: var(--texto-suave); font-size: 0.85rem; }
+.mano-hora { font-size: 0.85rem; }
+.mano-cartas { display: flex; gap: 4px; font-weight: 600; }
+.mano-pos { font-size: 0.85rem; }
+.mano-res { text-align: right; font-weight: 600; }
+.fila-mano.no-jugaba .mano-res { font-weight: 400; font-size: 0.85rem; }
+.resultado.positivo, .mano-res.positivo { color: var(--acento); }
+.resultado.negativo, .mano-res.negativo { color: var(--malo); }

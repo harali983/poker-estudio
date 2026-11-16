@@ -44,6 +44,8 @@
   <ul id="lista-preflop"></ul>
   <h2>Cantidades y teclado</h2>
   <ul id="lista-teclado"></ul>
+  <h2>Mis manos (historial.js)</h2>
+  <ul id="lista-historial"></ul>
   <h2>Web Worker (el mismo cálculo que usa la app)</h2>
   <ul id="lista-worker"><li>Esperando al worker…</li></ul>
   <h2>Base de datos (IndexedDB, en una base de datos de prueba aparte)</h2>
@@ -66,6 +68,7 @@
       cartasPorCalle, mesaPorCalle, cambiarCartasDeMesa, cartasConocidas,
     } from '../js/motor.js';
     import { cerrarMano, pedirMisCartas } from '../js/manos.js';
+    import { resumenMano, sumarResultados, agruparPorPartida, manoCerrada } from '../js/historial.js';
     import {
       calcularFinal, repartir, netos, unidadDeFichas, calcularBotes, faltanGanadores,
       decidirShowdown, puedeHacerMuck, motivoShowdown,
@@ -1337,6 +1340,70 @@
         const sTras = calcularEstado(conSubida);
         okT(sTras.apuestaMaxima === 7 && sTras.turno === 4 && sTras.aPagar === 7 && sTras.subidaMinima === 12 && sTras.avisos.length === 0,
           'El UTG sube hasta 7: el siguiente paga 7 y la subida mínima pasa a 12', resumen(sTras));
+      }
+
+      // ---- Mis manos (historial.js) — Fase 3, paso 1 ----
+      {
+        const okH = (bien, texto, detalle = '') => anotar('lista-historial', bien, texto, detalle);
+        const ver = (o) => JSON.stringify(o);
+        const aShowdown = ['0 call', '1 fold', '2 check', ...['flop', 'turn', 'river'].flatMap((c) => [c, '2 check', '0 check'])];
+        const mSd = jugar(nueva(3, 0), aShowdown);
+        const cerrar = (m, cierre, n = 3) => cerrarMano(m, partidaDe(n, 0), calcularEstado(m), cierre).mano;
+
+        // Ganas en el showdown (BTN, 3 jugadores, ciegas 1/2: pagas 2 y te llevas 5)
+        const gano = cerrar({ ...mSd, misCartas: tc('As Ks') }, { ganadores: [0] });
+        const rGano = resumenMano(gano);
+        okH(rGano.jugaba && rGano.posicion === 'BTN' && rGano.resultado === 3 && rGano.resultadoBB === 1.5
+          && rGano.showdown && rGano.motivo === 'showdown' && rGano.bote === 5 && rGano.jugadores === 3,
+          'Resumen: ganas en el showdown desde el BTN → +3 fichas (+1,5 BB), bote 5, 3 jugadores', ver(rGano));
+        okH(rGano.clase === 'AKs' && ver(rGano.misCartas) === ver(tc('As Ks')),
+          'Resumen: tus cartas y su clase (A♠ K♠ → AKs)', rGano.clase);
+
+        // Pierdes en el showdown
+        const rPierdo = resumenMano(cerrar(mSd, { ganadores: [2] }));
+        okH(rPierdo.resultado === -2 && rPierdo.resultadoBB === -1 && rPierdo.showdown && rPierdo.clase === null && rPierdo.misCartas === null,
+          'Resumen: pierdes en el showdown → −2 (−1 BB); sin cartas anotadas, clase null', ver(rPierdo));
+
+        // Muck en el showdown: no cuenta como llegar a enseñar
+        const conMuck = cerrar(mSd, { ganadores: [2] });
+        const rMuck = resumenMano({ ...conMuck, final: { ...conMuck.final, muck: [0] } });
+        okH(!rMuck.showdown && rMuck.resultado === -2, 'Resumen: si haces muck, no cuenta como showdown', ver(rMuck));
+
+        // Te retiras antes del flop (6 jugadores, eres el BTN)
+        const mFold = jugar(nueva(6, 0), ['3 subida 6', '4 fold', '5 fold', '0 fold', '1 fold', '2 fold']);
+        const rFold = resumenMano(cerrar(mFold, {}, 6));
+        okH(rFold.jugaba && rFold.resultado === 0 && !rFold.showdown && rFold.motivo === 'retirada' && rFold.jugadores === 6,
+          'Resumen: te retiras sin poner nada → 0, sin showdown, motivo retirada', ver(rFold));
+
+        // Una mano en la que no jugabas
+        const sinMi = { ...gano, jugadores: gano.jugadores.map((j) => ({ ...j, jugadorId: j.jugadorId === 'yo' ? 'otro' : j.jugadorId })) };
+        const rSinMi = resumenMano(sinMi);
+        okH(!rSinMi.jugaba && rSinMi.resultado === null && rSinMi.resultadoBB === null && rSinMi.posicion === null,
+          'Resumen: si no jugabas esa mano, no hay resultado ni posición', ver(rSinMi));
+
+        // Agrupar por partida: orden, manos en curso fuera y suma en BB mano a mano
+        const m = (id, partidaId, numero, fecha, base, ciegas) =>
+          ({ ...base, id, partidaId, numero, fecha, ...(ciegas ? { ciegas } : {}) });
+        const manosH = [
+          m('a1', 'A', 1, '2026-11-10T20:00', gano),
+          m('a2', 'A', 2, '2026-11-10T20:05', gano, { sb: 2, bb: 4, ante: 0 }), // +3 fichas con BB 4 = +0,75 BB
+          m('a3', 'A', 3, '2026-11-10T20:10', { ...mSd, final: null }),         // en curso: no sale
+          m('b1', 'B', 1, '2026-11-12T21:00', cerrar(mSd, { ganadores: [2] })),
+          m('c1', 'C', 1, '2026-11-11T18:00', sinMi),                            // partida borrada
+        ];
+        const grupos = agruparPorPartida(manosH, [{ id: 'A', creada: '2026-11-10' }, { id: 'B', creada: '2026-11-12' }]);
+        okH(grupos.map((g) => g.partidaId).join(',') === 'B,C,A',
+          'Agrupar: las partidas de la más reciente a la más antigua', grupos.map((g) => g.partidaId).join(','));
+        const gA = grupos.find((g) => g.partidaId === 'A');
+        okH(gA.manos.map((r) => r.id).join(',') === 'a2,a1' && gA.partida && gA.partida.id === 'A',
+          'Agrupar: dentro de la partida, de la última mano a la primera; la mano en curso no sale', gA.manos.map((r) => r.id).join(','));
+        okH(ver(gA.total) === ver({ manos: 2, jugadas: 2, resultado: 6, resultadoBB: 2.25 }),
+          'Total de la partida: +6 fichas y +2,25 BB (1,5 + 0,75: cada mano con su BB)', ver(gA.total));
+        const gC = grupos.find((g) => g.partidaId === 'C');
+        okH(gC.partida === null && ver(gC.total) === ver({ manos: 1, jugadas: 0, resultado: 0, resultadoBB: 0 }),
+          'Agrupar: una mano de una partida que ya no existe sale igual; si no jugabas, no suma', ver(gC.total));
+        okH(agruparPorPartida([]).length === 0 && manoCerrada(gano) && !manoCerrada({ final: null }),
+          'Sin manos, la lista está vacía; manoCerrada distingue las manos en curso');
       }
     }
 
