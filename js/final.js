@@ -37,6 +37,19 @@ export function unidadDeFichas(ciegas) {
 }
 
 /**
+ * La ficha con la que se reparte un bote empatado: el máximo común divisor (en céntimos) de las
+ * ciegas, el ante y lo que ha puesto cada jugador. Así, si alguien apuesta una cantidad que no es
+ * múltiplo de la ciega pequeña (p. ej. 5 con ciegas 2/4), el empate sale a partes iguales (9/9)
+ * y no 10/8.
+ */
+export function unidadDeReparto(ciegas, estado) {
+  const mcd = (a, b) => (b ? mcd(b, a % b) : a);
+  const valores = [ciegas.sb, ciegas.bb, ciegas.ante, ...estado.jugadores.map((j) => j.total)]
+    .map(aCentimos).filter((v) => v > 0);
+  return deCentimos(valores.reduce(mcd, 0) || 1);
+}
+
+/**
  * Lo que nadie pagó: { asiento, cantidad } o null.
  * Se compara lo que ha puesto cada uno en toda la mano (también los que se retiraron).
  */
@@ -230,7 +243,7 @@ export function calcularFinal(mano, estado, cierreElegido = {}) {
   } else {
     muck = estado.vivos.filter((a) => (cierre.muck || []).includes(a));
     const vivos = new Set(estado.vivos.filter((a) => !muck.includes(a)));
-    const unidad = unidadDeFichas(mano.ciegas);
+    const unidad = unidadDeReparto(mano.ciegas, estado);
     const porBote = ganadoresPorBote(estado, cierre);
     if (porBote.length <= 1) {
       const elegidos = (porBote.length ? porBote[0].elegidos : []).filter((a) => vivos.has(a));

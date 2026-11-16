@@ -70,7 +70,7 @@
     import { cerrarMano, pedirMisCartas } from '../js/manos.js';
     import { resumenMano, sumarResultados, agruparPorPartida, manoCerrada } from '../js/historial.js';
     import {
-      calcularFinal, repartir, netos, unidadDeFichas, calcularBotes, faltanGanadores,
+      calcularFinal, repartir, netos, unidadDeFichas, unidadDeReparto, calcularBotes, faltanGanadores,
       decidirShowdown, puedeHacerMuck, motivoShowdown,
     } from '../js/final.js';
     import { describirMano, textoMano, nombreJugada } from '../js/describir.js';
@@ -640,6 +640,20 @@
           'Repartir: 8 entre 3 → 3, 3, 2; con fichas de 0,5: 7,5 → 4 y 3,5; 5 → 2,5 y 2,5');
         okF(unidadDeFichas({ sb: 1, bb: 2, ante: 0 }) === 1 && unidadDeFichas({ sb: 0.5, bb: 1, ante: 0.25 }) === 0.25,
           'La ficha sobrante es la más pequeña de la mesa (ciegas o ante)');
+
+        // Empate con una apuesta que no es múltiplo de la ciega pequeña (fallo de la v0.3.2)
+        const p24 = { ...partidaDe(2, 0), ciegas: { sb: 2, bb: 4, ante: 0 } };
+        const m24 = jugar(crearMano(p24, { id: 'm24', numero: 1, fecha: 'x' }),
+          ['0 call', '1 check', 'flop', '1 apuesta 5', '0 call', 'turn', '1 check', '0 check', 'river', '1 check', '0 check']);
+        const s24 = calcularEstado(m24);
+        const f24 = calcularFinal(m24, s24, { ganadores: [0, 1], manual: true });
+        okF(s24.bote === 18 && unidadDeReparto(m24.ciegas, s24) === 1
+          && f24.ganadores.length === 2 && f24.ganadores.every((g) => g.cantidad === 9),
+          'Ciegas 2/4, mano a mano, apuesta de 5 pagada y empate: bote 18 → 9 y 9 (antes salía 10/8)',
+          `bote ${s24.bote} · unidad ${unidadDeReparto(m24.ciegas, s24)} · ${ver(f24.ganadores)}`);
+        const u05 = unidadDeReparto({ sb: 0.5, bb: 1, ante: 0 }, { jugadores: [{ total: 1 }, { total: 1 }, { total: 1.5 }, { total: 0 }] });
+        okF(u05 === 0.5 && ver(repartir(3.5, [1, 2, 3], u05)) === '[{"asiento":1,"cantidad":1.5},{"asiento":2,"cantidad":1},{"asiento":3,"cantidad":1}]',
+          'Ciegas 0,5/1: bote de 3,5 entre 3 → 1,5 + 1 + 1 (ficha de reparto 0,5)', `unidad ${u05} · ${ver(repartir(3.5, [1, 2, 3], u05))}`);
 
         // Fichas actualizadas
         const pFichas = { ...partidaDe(3, 0, { fichas: [100, 100, 100] }), manosJugadas: 0 };
