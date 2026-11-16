@@ -666,6 +666,7 @@ h2 {
   list-style: none;
 }
 .filtros summary::-webkit-details-marker { display: none; }
+.filtros:not([open]) { padding-bottom: 4px; } /* cerrada: sin hueco debajo del título */
 .filtros summary::before { content: "▸"; color: var(--texto-suave); transition: transform 0.15s; }
 .filtros[open] summary::before { transform: rotate(90deg); }
 .filtros-activos { padding: 2px 8px; border-radius: 10px; background: rgba(46, 204, 113, 0.15); color: var(--acento); font-size: 0.8rem; font-weight: 600; }

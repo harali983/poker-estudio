@@ -1449,8 +1449,24 @@
         okH(sig(mSd, 2, null) === null && sig(mSd, 3, 'call') === null && sig(mSd, 99, 'call') === null && siguioRecomendacion(mSd, null) === null,
           'Recomendación: sin consejo, o si el evento no es una acción tuya → no se sabe (null)');
         const mSube = jugar(nueva(3, 0), ['0 subida 9', '1 fold', '2 fold']);
-        okH(siguioRecomendacion(mSube, { evento: 2, consejo: 'subir', hasta: 6 }) === true && sig(mSube, 2, 'allin') === true && sig(mSube, 2, 'call') === false,
+        okH(siguioRecomendacion(mSube, { evento: 2, consejo: 'subir', hasta: 6 }) === true && sig(mSube, 2, 'call') === false,
           'Recomendación: subir a 9 cuando decía subir a 6 cuenta como seguirla (cuenta la acción, no el tamaño)');
+        // All-in: solo cuenta acabar all-in
+        const m40 = nueva(3, 0, { fichas: 40 });
+        const subo6 = jugar(m40, ['0 subida 6']);
+        const voyAllin = jugar(m40, ['0 allin']);
+        okH(sig(subo6, 2, 'allin') === false && sig(voyAllin, 2, 'allin') === true && sig(mSube, 2, 'allin') === false
+          && sig(jugar(nueva(3, 0), ['0 allin 20']), 2, 'allin') === true && sig(subo6, 2, 'subir') === true,
+          'Recomendación "all-in": con 40 fichas, subir a 6 no la sigue y el all-in sí; sin fichas contadas, cuenta tocar All-in; "subir" a 6 sí',
+          [sig(subo6, 2, 'allin'), sig(voyAllin, 2, 'allin'), sig(mSube, 2, 'allin'), sig(jugar(nueva(3, 0), ['0 allin 20']), 2, 'allin')].join(' · '));
+        // Sin poder subir (subida all-in incompleta): pagar sigue "subir" y "all-in"
+        // Botón 2 (BTN, 9 fichas), tú en el 0 (SB), BB en el 1. Eventos: 0-1 ciegas, 2 "2 call",
+        // 3 "0 subida 6", 4 "1 call", 5 "2 allin" (hasta 9: no reabre), 6 "0 call" (tú)
+        const mIncompleta = jugar(nueva(3, 2, { fichas: [200, 200, 9] }), ['2 call', '0 subida 6', '1 call', '2 allin', '0 call']);
+        okH(sig(mIncompleta, 6, 'subir') === true && sig(mIncompleta, 6, 'allin') === true && sig(mIncompleta, 6, 'call') === true
+          && sig(mIncompleta, 6, 'fold') === false,
+          'Recomendación: si una subida all-in incompleta no te deja subir, pagar sigue "subir" y "all-in" (la pantalla resalta Call)',
+          ['subir', 'allin', 'call', 'fold'].map((c) => c + ':' + sig(mIncompleta, 6, c)).join(' '));
         const conDec = (base, consejo) => ({ ...base, decisiones: [{ evento: 2, consejo, equidad: 0.5 }] });
         okH(resumenMano(conDec(gano, 'subir')).noSeguiste === true && resumenMano(conDec(gano, 'call')).noSeguiste === false
           && resumenMano(gano).noSeguiste === false,

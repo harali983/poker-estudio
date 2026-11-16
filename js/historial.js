@@ -8,7 +8,7 @@
 // resultados en BB mano a mano (no "total en fichas ÷ BB de ahora"), porque las ciegas
 // pueden cambiar durante la partida.
 
-import { calcularEstado } from './motor.js';
+import { calcularEstado, opciones } from './motor.js';
 import { netos, redondear } from './final.js';
 import { clase } from './rangos.js';
 import { POSICIONES } from './posiciones.js';
@@ -82,7 +82,10 @@ function tipoDeAccion(antes, despues, ev) {
  * saber (consejo sin calcular, o el evento ya no es una acción tuya).
  * Cuenta lo que hiciste de verdad, no el tamaño:
  *  - subir / apostar → cualquier apuesta o subida (subir a 9 cuando decía 6 cuenta como seguirla);
- *  - all-in → un all-in o cualquier subida;
+ *  - all-in → acabar all-in (sin fichas contadas, tocar All-in); una subida que no te deja
+ *    all-in no cuenta;
+ *  - subir / apostar / all-in cuando no podías subir (una subida all-in incompleta no te
+ *    reabrió la acción) → pagar, que es lo que resalta la pantalla;
  *  - call → pagar (también un all-in que solo iguala);
  *  - check → check;
  *  - fold → retirarse, o check si no había nada que pagar (pasar gratis no es desobedecer).
@@ -96,10 +99,18 @@ export function siguioRecomendacion(mano, decision) {
   const antes = calcularEstado(mano, mano.eventos.slice(0, decision.evento));
   const despues = calcularEstado(mano, mano.eventos.slice(0, decision.evento + 1));
   const hice = tipoDeAccion(antes, despues, ev);
+  const op = opciones(antes);
+  // Si no podías subir (p. ej. una subida all-in incompleta no te reabrió la acción), la
+  // pantalla resalta Call en lugar de Subir / All-in: pagar cuenta como seguir el consejo.
+  const noPodiasSubir = op && !op.subir && !op.apostar;
+  const quedeAllin = Boolean((despues.jugadores.find((j) => j.asiento === yo.asiento) || {}).allin);
   switch (decision.consejo) {
     case 'subir':
-    case 'apostar': return hice === 'agresiva';
-    case 'allin': return hice === 'agresiva' || ev.accion === 'allin';
+    case 'apostar': return hice === 'agresiva' || (noPodiasSubir && hice === 'call');
+    case 'allin':
+      if (noPodiasSubir && hice === 'call') return true;
+      // Solo cuenta acabar all-in (sin fichas contadas, haber tocado All-in)
+      return quedeAllin || ev.accion === 'allin';
     case 'call': return hice === 'call';
     case 'check': return hice === 'check';
     case 'fold': return hice === 'fold' || (hice === 'check' && antes.aPagar === 0);
