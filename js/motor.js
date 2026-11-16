@@ -158,7 +158,7 @@ export function calcularEstado(mano, eventos = mano.eventos) {
 
   // Pone fichas hasta "hasta" en esta calle (o las que le queden, si no le llegan)
   function poner(j, hasta, i) {
-    let diferencia = hasta - j.puesto;
+    let diferencia = aCentimos(hasta - j.puesto);
     if (diferencia < 0) diferencia = 0;
     if (j.fichas !== null && diferencia >= j.fichas) {
       if (diferencia > j.fichas) {
@@ -169,7 +169,10 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     }
     j.puesto = aCentimos(j.puesto + diferencia);
     j.total = aCentimos(j.total + diferencia);
-    if (j.fichas !== null) j.fichas = aCentimos(j.fichas - diferencia);
+    if (j.fichas !== null) {
+      j.fichas = aCentimos(j.fichas - diferencia);
+      if (j.fichas === 0) j.allin = true; // tras redondear: sin fichas es all-in
+    }
   }
 
   eventos.forEach((ev, i) => {
@@ -321,7 +324,7 @@ export function calcularEstado(mano, eventos = mano.eventos) {
     faltan: e.faltan,
     motivoFin: e.motivoFin,
     ganador: e.ganador,
-    bote: jugadores.reduce((s, j) => s + j.total, 0),
+    bote: aCentimos(jugadores.reduce((s, j) => s + j.total, 0)),
     apuestaMaxima: e.apuestaMaxima,
     aPagar: delTurno ? aPagarDe(delTurno) : 0,
     subidaMinima: e.apuestaMaxima + Math.max(e.incremento, bb),
@@ -363,7 +366,7 @@ export function eventoDeAccion(estado, accion, hasta) {
   const ev = { tipo: 'accion', calle: estado.calle, asiento: estado.turno, accion };
   if (accion === 'call') {
     const j = estado.jugadores.find((x) => x.asiento === estado.turno);
-    ev.hasta = j.puesto + estado.aPagar;
+    ev.hasta = aCentimos(j.puesto + estado.aPagar);
   } else if (hasta !== undefined) {
     ev.hasta = hasta;
   }
