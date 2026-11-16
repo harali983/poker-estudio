@@ -27,9 +27,12 @@ export function iniciarVerMano() {
   let ocupado = false;          // borrando
   let temporizadorNotas = null;
   let temporizadorGuardado = null;
+  let desdeLaLista = false;     // ¿se abrió tocando una mano en Mis manos?
 
   // ---- Leer la mano y pintarla ----
-  async function alEntrar(id) {
+  // "desde": la pantalla de la que se viene (la pasa app.js)
+  async function alEntrar(id, { desde } = {}) {
+    desdeLaLista = desde === 'manos';
     const estaCarga = ++carga;
     mano = null;
     clearTimeout(temporizadorNotas);
@@ -196,6 +199,15 @@ export function iniciarVerMano() {
   function guardarYa() {
     if (temporizadorNotas) guardarNotas();
   }
+
+  // ---- Volver a Mis manos ----
+  // Si se vino de la lista, se vuelve con "atrás" (así la ficha no se queda en el historial y
+  // "atrás" desde la lista va a Inicio). Si se abrió directamente, se sustituye por la lista.
+  document.querySelector('#pantalla-ver-mano .volver').addEventListener('click', (e) => {
+    e.preventDefault();
+    guardarYa();
+    if (desdeLaLista) history.back(); else location.replace('#manos');
+  });
 
   // ---- Borrar la mano (y sus participaciones) ----
   $('ficha-borrar').addEventListener('click', async () => {

@@ -57,6 +57,9 @@ if ('serviceWorker' in navigator) {
 document.getElementById('btn-recargar').addEventListener('click', () => location.reload());
 
 // ---- 3. Navegación entre pantallas ----
+// La altura de cada pantalla la decide la app (abajo), no el navegador: si no, al volver con
+// "atrás" el navegador recoloca la lista de Mis manos antes de que esté pintada.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 const PANTALLAS = ['inicio', 'jugar', 'mano', 'manos', 'ver-mano', 'calculadora', 'ajustes'];
 
 // Cada pantalla con lógica se prepara la primera vez que se abre.
@@ -77,7 +80,7 @@ let parametroActual = null;
 let alturaDeLaLista = 0; // por dónde ibas en Mis manos al abrir una mano (para volver al mismo sitio)
 
 // La dirección puede llevar un dato detrás de una barra: "#ver-mano/<id de la mano>".
-// Ese dato se le pasa a alEntrar() de la pantalla.
+// Ese dato se le pasa a alEntrar() de la pantalla, junto con la pantalla de la que se viene.
 function mostrarPantalla() {
   const [pedida, ...resto] = (location.hash.slice(1) || 'inicio').split('/');
   const nombre = PANTALLAS.includes(pedida) ? pedida : 'inicio'; // dirección desconocida → inicio
@@ -98,7 +101,7 @@ function mostrarPantalla() {
   if (INICIAR[nombre] && !preparadas[nombre]) {
     preparadas[nombre] = INICIAR[nombre]();
   }
-  const listo = preparadas[nombre] && preparadas[nombre].alEntrar ? preparadas[nombre].alEntrar(parametro) : null;
+  const listo = preparadas[nombre] && preparadas[nombre].alEntrar ? preparadas[nombre].alEntrar(parametro, { desde: actual }) : null;
 
   actual = nombre;
   parametroActual = parametro;
