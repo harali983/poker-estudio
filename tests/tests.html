@@ -396,15 +396,15 @@
 
       // Call que te deja sin fichas con decimales: tiene que quedar all-in (antes: turno a un jugador sin fichas)
       const mCorto = jugar(nueva(3, 0, { fichas: [11.63, 200, 200] }), ['0 subida 5.07', '1 fold', '2 subida 30']);
-      const evCall = eventoDeAccion(calcularEstado(mCorto), 'call');
-      ok(evCall.hasta === 11.63, 'El call creado con eventoDeAccion guarda "hasta" redondeado: 11,63 exacto', 'hasta ' + evCall.hasta);
+      const evCallDec = eventoDeAccion(calcularEstado(mCorto), 'call');
+      ok(evCallDec.hasta === 11.63, 'El call creado con eventoDeAccion guarda "hasta" redondeado: 11,63 exacto', 'hasta ' + evCallDec.hasta);
       const quedaAllin = (eventos, texto) => {
         const s = calcularEstado(mCorto, eventos);
         const j0 = s.jugadores.find((j) => j.asiento === 0);
         ok(j0.allin === true && j0.fichas === 0 && j0.puesto === 11.63 && s.fase === 'cartas' && s.faltan === 'flop', texto,
           `${resumen(s)} · fichas ${j0.fichas} · allin ${j0.allin} · puesto ${j0.puesto}`);
       };
-      quedaAllin([...mCorto.eventos, evCall],
+      quedaAllin([...mCorto.eventos, evCallDec],
         'Con 11,63 fichas: subes a 5,07, la BB sube a 30 y pagas → all-in con 11,63, fichas 0, falta el flop');
       quedaAllin([...mCorto.eventos, { tipo: 'accion', calle: 'preflop', asiento: 0, accion: 'call', hasta: 11.629999999999999 }],
         'Lo mismo con un call ya guardado con "hasta" 11,629999999999999 (manos guardadas antes del arreglo)');
